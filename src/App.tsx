@@ -1,56 +1,71 @@
-import React, { useState } from 'react';
-import { account, ID } from './lib/appwrite';
-import { Models } from 'appwrite';
-import { Button } from "@/components/ui/button"
+import { Login } from "./pages/Login";  
+import { Home } from "./pages/Home";  
+import { UserProvider } from "./lib/context/user";
+import { IdeasProvider } from "./lib/context/ideas";
+import { useUser } from "./lib/context/user";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useEffect } from "react";
 
-const App: React.FC = () => {
-  const [loggedInUser, setLoggedInUser] = useState<Models.User<Models.Preferences> | null>(null);
-  const [email, setEmail] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
-  const [name, setName] = useState<string>('');
-
-  async function login(email: string, password: string): Promise<void> {
-    await account.createEmailPasswordSession(email, password);
-    setLoggedInUser(await account.get());
-  }
+function App(): JSX.Element {
+  const isLoginPage = window.location.pathname === "/login";
+  
+  // Request notification permission when app loads
+  useEffect(() => {
+    if ("Notification" in window) {
+      Notification.requestPermission();
+    }
+  }, []);
 
   return (
     <div>
-      <p className="text-red-500">
-        {loggedInUser ? `Logged in as ${loggedInUser.name}` : 'Not logged in'}
-      </p>
-
-      <form>
-        <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
-        <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} />
-        <input type="text" placeholder="Name" value={name} onChange={e => setName(e.target.value)} />
-
-        <button type="button" onClick={() => login(email, password)}>
-          Login
-        </button>
-
-        <button
-          type="button"
-          onClick={async () => {
-            await account.create(ID.unique(), email, password, name);
-            login(email, password);
-          }}
-        >
-          Register
-        </button>
-
-        <button
-          type="button"
-          onClick={async () => {
-            await account.deleteSession('current');
-            setLoggedInUser(null);
-          }}
-        >
-          Logout
-        </button>
-      </form>
-    </div>
+    <UserProvider>
+      <IdeasProvider>
+        <Navbar />
+        <main>{isLoginPage ? <Login /> : <Home />}</main>
+      </IdeasProvider>
+    </UserProvider>
+  </div>
   );
-};
+}
+
+function Navbar(): JSX.Element {
+  const user = useUser();
+
+  return (
+    <nav className="border-b">
+      <div className="container flex h-14 items-center px-4 max-w-7xl mx-auto">
+        <a href="/" className="font-semibold text-lg">
+          Gatchapom
+        </a>
+        <div className="ml-auto flex items-center gap-4">
+          {user.current ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative">
+                  <span>{user.current.email}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => user.logout()}>
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button asChild variant="default">
+              <a href="/login">Login</a>
+            </Button>
+          )}
+        </div>
+      </div>
+    </nav>
+  );
+}
 
 export default App;
