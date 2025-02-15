@@ -7,9 +7,7 @@ declare global {
     }
 }
 
-export const client = new Client();
-
-client
+export const client = new Client()
     .setEndpoint('https://cloud.appwrite.io/v1')
     .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
 

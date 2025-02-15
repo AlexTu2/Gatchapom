@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useUser } from "../lib/context/user";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { databases } from "../lib/appwrite";
-import { ID } from "appwrite";
+import { ID, Permission, Role, Query } from "appwrite";
 
 type TimerMode = 'work' | 'shortBreak' | 'longBreak';
 
@@ -43,33 +43,54 @@ export function Home() {
   // Load settings from Appwrite when user logs in
   useEffect(() => {
     async function loadSettings() {
-      if (!user?.id) return;
+      if (!user?.current?.$id) {
+        console.log('No user ID yet, waiting...');
+        return;
+      }
       
+      console.log('Loading settings for user:', user.current.$id);
       try {
-        const doc = await databases.getDocument(
+        // First try to list documents to find if one exists for this user
+        const response = await databases.listDocuments(
           import.meta.env.VITE_DATABASE_ID,
           'timer_settings',
-          user.id
+          [
+            Query.equal('userId', user.current.$id)
+          ]
         );
-        setSettings(JSON.parse(doc.settings));
-      } catch (error) {
-        // If document doesn't exist, create it with default settings
-        try {
+
+        if (response.documents.length > 0) {
+          // Document exists, use it
+          const doc = response.documents[0];
+          console.log('Found existing settings:', doc);
+          setSettings(JSON.parse(doc.settings));
+        } else {
+          // No document exists, create one
+          console.log('No settings found, creating new document...');
           const doc = await databases.createDocument(
             import.meta.env.VITE_DATABASE_ID,
             'timer_settings',
-            user.id,
-            { settings: JSON.stringify(DEFAULT_SETTINGS) }
+            ID.unique(),
+            { 
+              userId: user.current.$id,
+              settings: JSON.stringify(DEFAULT_SETTINGS) 
+            },
+            [
+              Permission.read(Role.user(user.current.$id)),
+              Permission.update(Role.user(user.current.$id)),
+              Permission.delete(Role.user(user.current.$id))
+            ]
           );
+          console.log('Created new settings document:', doc);
           setSettings(JSON.parse(doc.settings));
-        } catch (e) {
-          console.error('Error creating settings:', e);
         }
+      } catch (error) {
+        console.error('Error managing settings:', error);
       }
     }
 
     loadSettings();
-  }, [user?.id]);
+  }, [user?.current?.$id]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -134,16 +155,43 @@ export function Home() {
   const updateSettings = async (newSettings: TimerSettings) => {
     setSettings(newSettings);
     
-    if (user?.id) {
+    if (!user?.current?.$id) {
+      console.log('No user ID found:', user);
+      return;
+    }
+    
+    try {
+      console.log('Trying to create document...');
+      const doc = await databases.createDocument(
+        import.meta.env.VITE_DATABASE_ID,
+        'timer_settings',
+        user.current.$id,
+        { 
+          userId: user.current.$id,
+          settings: JSON.stringify(newSettings) 
+        },
+        [
+          Permission.read(Role.user(user.current.$id)),
+          Permission.update(Role.user(user.current.$id)),
+          Permission.delete(Role.user(user.current.$id))
+        ]
+      );
+      console.log('Document created:', doc);
+    } catch (error) {
+      console.log('Create failed, trying update...', error);
       try {
-        await databases.updateDocument(
+        const doc = await databases.updateDocument(
           import.meta.env.VITE_DATABASE_ID,
           'timer_settings',
-          user.id,
-          { settings: JSON.stringify(newSettings) }
+          user.current.$id,
+          { 
+            userId: user.current.$id,
+            settings: JSON.stringify(newSettings) 
+          }
         );
-      } catch (error) {
-        console.error('Error saving settings:', error);
+        console.log('Document updated:', doc);
+      } catch (e) {
+        console.error('Error saving settings:', e);
       }
     }
     
@@ -213,7 +261,8 @@ export function Home() {
                         const newValue = parseInt(e.target.value);
                         const maxValue = isDevMode ? 300 : 60;
                         if (newValue > 0 && newValue <= maxValue) {
-                          updateSettings({ ...settings, [key]: newValue });
+                          const newSettings = { ...settings, [key]: newValue };
+                          setSettings(newSettings);
                         }
                       }}
                     />
@@ -221,7 +270,10 @@ export function Home() {
                 ))}
                 <Button 
                   className="w-full mt-4"
-                  onClick={() => setIsSettingsOpen(false)}
+                  onClick={async () => {
+                    await updateSettings(settings);
+                    setIsSettingsOpen(false);
+                  }}
                 >
                   Save Settings
                 </Button>
