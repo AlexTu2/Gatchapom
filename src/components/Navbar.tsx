@@ -14,11 +14,11 @@ export function Navbar() {
 
   useEffect(() => {
     if (user.current?.prefs?.avatarUrl) {
-      setAvatarUrl(user.current.prefs.avatarUrl);
+      setAvatarUrl(user.current.prefs.avatarUrl.toString());
     } else {
       setAvatarUrl(null);
     }
-  }, [user.current?.prefs]);
+  }, [user.current?.prefs?.avatarUrl]);
 
   return (
     <nav className="border-b bg-white">
@@ -39,6 +39,7 @@ export function Navbar() {
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full overflow-hidden p-0">
                   {avatarUrl ? (
                     <img
+                      key={avatarUrl}
                       src={avatarUrl}
                       alt="Profile"
                       className="h-full w-full object-cover"

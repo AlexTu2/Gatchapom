@@ -1,6 +1,6 @@
 import { ID } from "appwrite";
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { account } from "../appwrite";
+import { account, client, BUCKET_ID, storage } from "../appwrite";
 
 interface UserContextType {
   current: any;
@@ -16,39 +16,32 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
-    // Check if user is logged in
     account.get()
       .then(response => {
-        console.log('User loaded:', response); // Debug log
         if (!response.prefs) {
-          // Initialize preferences if they don't exist
           account.updatePrefs({
             avatarId: null,
             avatarUrl: null
           }).then(updatedUser => {
-            console.log('Initialized prefs:', updatedUser); // Debug log
             setUser({ ...response, prefs: updatedUser });
           });
         } else {
           setUser(response);
         }
       })
-      .catch(error => {
-        console.error('Error loading user:', error);
-        setUser(null);
-      });
+      .catch(() => setUser(null));
   }, []);
 
   async function updateAvatar(avatarId: string | null) {
     try {
-      console.log('Updating avatar:', avatarId); // Debug log
       const updatedPrefs = await account.updatePrefs({
         ...user.prefs,
         avatarId,
-        avatarUrl: avatarId ? `${client.endpoint}/storage/buckets/${BUCKET_ID}/files/${avatarId}/view?project=${client.config.project}` : null
+        avatarUrl: avatarId ? storage.getFileView(BUCKET_ID, avatarId) : null
       });
-      console.log('Updated prefs:', updatedPrefs); // Debug log
-      setUser({ ...user, prefs: updatedPrefs });
+      
+      const updatedUser = { ...user, prefs: updatedPrefs };
+      setUser(updatedUser);
       return updatedPrefs;
     } catch (error) {
       console.error('Update avatar error:', error);
@@ -60,7 +53,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
     try {
       await account.createEmailPasswordSession(email, password);
       const loggedInUser = await account.get();
-      // Initialize preferences if they don't exist
       if (!loggedInUser.prefs) {
         const updatedUser = await account.updatePrefs({
           avatarId: null,
@@ -82,7 +74,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
       await account.create(ID.unique(), email, password, username);
       await account.createEmailPasswordSession(email, password);
       const loggedInUser = await account.get();
-      // Initialize preferences
       const updatedUser = await account.updatePrefs({
         avatarId: null,
         avatarUrl: null

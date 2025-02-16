@@ -9,10 +9,7 @@ import { useForm } from "react-hook-form";
 import { ID } from "appwrite";
 
 const loginSchema = z.object({
-  email: z.string()
-    .email({ message: "Please enter a valid email address" })
-    .trim()
-    .toLowerCase(),
+  email: z.string().email({ message: "Please enter a valid email address" }),
   password: z.string().min(8, { message: "Password must be at least 8 characters long" }),
 });
 
@@ -21,10 +18,7 @@ const registerSchema = z.object({
     .min(3, { message: "Username must be at least 3 characters long" })
     .max(30, { message: "Username must be less than 30 characters" })
     .regex(/^[a-zA-Z0-9_-]+$/, { message: "Username can only contain letters, numbers, underscores and dashes" }),
-  email: z.string()
-    .email({ message: "Please enter a valid email address" })
-    .trim()
-    .toLowerCase(),
+  email: z.string().email({ message: "Please enter a valid email address" }),
   password: z.string().min(8, { message: "Password must be at least 8 characters long" }),
   confirmPassword: z.string()
 }).refine((data) => data.password === data.confirmPassword, {
@@ -35,7 +29,6 @@ const registerSchema = z.object({
 export function Login() {
   const user = useUser();
   const [isRegistering, setIsRegistering] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -56,38 +49,11 @@ export function Login() {
   });
 
   async function onLoginSubmit(values: z.infer<typeof loginSchema>) {
-    try {
-      setError(null);
-      await user.login(values.email.trim().toLowerCase(), values.password);
-    } catch (err) {
-      console.error('Login error:', err);
-      setError('Invalid email or password');
-    }
+    await user.login(values.email, values.password);
   }
 
   async function onRegisterSubmit(values: z.infer<typeof registerSchema>) {
-    try {
-      setError(null);
-      const cleanEmail = values.email.trim().toLowerCase();
-      if (!cleanEmail.includes('@')) {
-        setError('Please enter a valid email address');
-        return;
-      }
-      await user.register(
-        values.username.trim(),
-        cleanEmail,
-        values.password
-      );
-    } catch (err: any) {
-      console.error('Registration error:', err);
-      if (err?.message?.includes('email')) {
-        setError('Please enter a valid email address');
-      } else if (err?.code === 409) {
-        setError('An account with this email already exists');
-      } else {
-        setError('Registration failed. Please try again.');
-      }
-    }
+    await user.register(values.username, values.email, values.password);
   }
 
   return (
@@ -104,18 +70,12 @@ export function Login() {
             }
             {" "}
             <button
-              onClick={() => {
-                setError(null);
-                setIsRegistering(!isRegistering);
-              }}
+              onClick={() => setIsRegistering(!isRegistering)}
               className="text-indigo-600 hover:text-indigo-500"
             >
               {isRegistering ? "Sign in" : "Create one"}
             </button>
           </p>
-          {error && (
-            <p className="mt-2 text-center text-red-500">{error}</p>
-          )}
         </div>
 
         {isRegistering ? (

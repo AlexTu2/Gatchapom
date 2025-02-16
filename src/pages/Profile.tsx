@@ -67,7 +67,9 @@ export function Profile() {
 
   useEffect(() => {
     if (user.current?.prefs?.avatarUrl) {
-      setAvatarUrl(user.current.prefs.avatarUrl);
+      setAvatarUrl(user.current.prefs.avatarUrl.toString());
+    } else {
+      setAvatarUrl(null);
     }
   }, [user.current?.prefs?.avatarUrl]);
 
@@ -130,48 +132,48 @@ export function Profile() {
       const file = event.target.files?.[0];
       if (!file) return;
 
-      // Validate file type
       if (!file.type.startsWith('image/')) {
         setError('Please upload an image file');
         return;
       }
 
-      // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         setError('Image must be less than 5MB');
         return;
       }
 
       // Delete old avatar if it exists
-      if (user.current?.avatarId) {
+      if (user.current?.prefs?.avatarId) {
         try {
-          await storage.deleteFile(BUCKET_ID, user.current.avatarId);
+          await storage.deleteFile(BUCKET_ID, user.current.prefs.avatarId);
         } catch (error) {
           console.error('Error deleting old avatar:', error);
         }
       }
 
-      // Upload new avatar
+      // Upload new file
       const response = await storage.createFile(
         BUCKET_ID,
         ID.unique(),
         file
       );
 
-      // Update user document
-      await user.updateAvatar(response.$id);
-
-      // Update the avatar URL
-      const newUrl = getAvatarUrl(response.$id);
-      console.log('New avatar URL:', newUrl);
-      setAvatarUrl(newUrl);
+      // Update user preferences with new avatar
+      const updatedPrefs = await user.updateAvatar(response.$id);
+      
+      // Force a new URL object with cache-busting
+      if (updatedPrefs?.avatarUrl) {
+        const url = new URL(updatedPrefs.avatarUrl.toString());
+        url.searchParams.set('v', Date.now().toString());
+        setAvatarUrl(url.toString());
+      }
+      
       setSuccess("Profile picture updated successfully!");
-
-      // Clear the file input
       event.target.value = '';
     } catch (err: any) {
       console.error('Avatar upload error:', err);
       setError(err?.message || 'Failed to upload profile picture');
+      setAvatarUrl(null);
     } finally {
       setIsUploading(false);
     }
@@ -188,14 +190,23 @@ export function Profile() {
           <CardContent className="space-y-4">
             <div className="flex items-center space-x-4">
               {avatarUrl ? (
-                <img
-                  src={avatarUrl}
-                  alt="Profile"
-                  className="h-24 w-24 rounded-full object-cover"
-                />
+                <div className="relative h-24 w-24">
+                  <img
+                    key={avatarUrl}
+                    src={avatarUrl}
+                    alt="Profile"
+                    className="h-24 w-24 rounded-full object-cover"
+                    onError={() => setAvatarUrl(null)}
+                  />
+                  {isUploading && (
+                    <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center text-xl">
-                  {user.current.name?.charAt(0).toUpperCase()}
+                  {user.current?.name?.charAt(0).toUpperCase()}
                 </div>
               )}
               <div>

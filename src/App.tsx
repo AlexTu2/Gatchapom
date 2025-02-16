@@ -1,13 +1,13 @@
-import { Login } from "./pages/Login";  
-import { Home } from "./pages/Home";  
-import { Profile } from "./pages/Profile";
+import { Login } from "@/pages/Login";  
+import { Home } from "@/pages/Home";  
+import { Profile } from "@/pages/Profile";
 import { UserProvider } from "./lib/context/user";
 import { IdeasProvider } from "./lib/context/ideas";
 import { Navbar } from "@/components/Navbar";
 import { useEffect } from "react";
 import { useUser } from "./lib/context/user";
 
-function AppRoutes(): JSX.Element {
+function AppRoutes() {
   const user = useUser();
   const isLoginPage = window.location.pathname === "/login";
   const isProfilePage = window.location.pathname === "/profile";
@@ -22,7 +22,7 @@ function AppRoutes(): JSX.Element {
          <Home />;
 }
 
-function AppContent(): JSX.Element {
+function AppContent() {
   const user = useUser();
 
   // Request notification permission when app loads
@@ -46,7 +46,7 @@ function AppContent(): JSX.Element {
   );
 }
 
-function App(): JSX.Element {
+function App() {
   return (
     <UserProvider>
       <IdeasProvider>
