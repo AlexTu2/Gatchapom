@@ -12,17 +12,8 @@ import { useNavigate } from 'react-router-dom';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronDown } from "lucide-react";
 import { Client } from "appwrite";
-import { Coins } from "lucide-react";
 
-interface Message {
-  $id: string;
-  content: string;
-  userId: string;
-  userName: string;
-  userAvatar?: string;
-  createdAt: string;
-}
-
+// Define interfaces
 type TimerMode = 'work' | 'shortBreak' | 'longBreak';
 
 interface TimerSettings {
@@ -39,332 +30,124 @@ const DEFAULT_SETTINGS: TimerSettings = {
   longBreakInterval: 4
 };
 
-export function Home() {
-  const user = useUser();
-  const navigate = useNavigate();
-  const { mode, setMode, isLoading: isTimerLoading } = useTimer();
-  const [settings, setSettings] = useState<TimerSettings>(DEFAULT_SETTINGS);
-  const [isDevMode, setIsDevMode] = useState(() => {
-    return localStorage.getItem('devMode') === 'true';
-  });
-  const [timeLeft, setTimeLeft] = useState(DEFAULT_SETTINGS[mode] * (isDevMode ? 1 : 60));
+// Create a custom hook for timer logic
+function useTimerLogic(settings: TimerSettings, isDevMode: boolean, mode: TimerMode) {
+  const [timeLeft, setTimeLeft] = useState(settings[mode] * (isDevMode ? 1 : 60));
   const [isActive, setIsActive] = useState(false);
-  const [completedPomodoros, setCompletedPomodoros] = useState(0);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [showCompletionDialog, setShowCompletionDialog] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [isSettingsLoading, setIsSettingsLoading] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Chat states
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState("");
-  const [showScrollButton, setShowScrollButton] = useState(false);
-  const [isNearBottom, setIsNearBottom] = useState(true);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
-
-  // Create a single audio instance
+  const [completedPomodoros, setCompletedPomodoros] = useState(0);
   const alarmSound = useRef(new Audio('/alarm.mp3'));
 
-  // Load settings from Appwrite
+  const resetTimer = useCallback(() => {
+    setIsActive(false);
+    setIsRunning(false);
+    setTimeLeft(settings[mode] * (isDevMode ? 1 : 60));
+  }, [settings, mode, isDevMode]);
+
+  const toggleTimer = useCallback(() => {
+    setIsActive(prev => !prev);
+    setIsRunning(prev => !prev);
+  }, []);
+
+  // Update timeLeft when settings or mode changes
   useEffect(() => {
-    let mounted = true;
-    
-    async function loadSettings() {
-      if (!user?.current?.$id) {
-        if (mounted) setIsSettingsLoading(false);
-        return;
-      }
-      
-      try {
-        const response = await databases.listDocuments(
-          DATABASE_ID,
-          'timer_settings',
-          [Query.equal('userId', user.current.$id)]
-        );
+    setIsActive(false);
+    setIsRunning(false);
+    setTimeLeft(settings[mode] * (isDevMode ? 1 : 60));
+  }, [mode, settings, isDevMode]);
 
-        if (!mounted) return;
-
-        if (response.documents.length > 0) {
-          const doc = response.documents[0];
-          console.log('Found existing settings:', doc);
-          const parsedSettings = JSON.parse(doc.settings);
-          
-          const cleanSettings: TimerSettings = {
-            work: parsedSettings.work ?? DEFAULT_SETTINGS.work,
-            shortBreak: parsedSettings.shortBreak ?? DEFAULT_SETTINGS.shortBreak,
-            longBreak: parsedSettings.longBreak ?? DEFAULT_SETTINGS.longBreak,
-            longBreakInterval: parsedSettings.longBreakInterval ?? DEFAULT_SETTINGS.longBreakInterval
-          };
-          
-          console.log('Cleaned settings:', cleanSettings);
-          setSettings(cleanSettings);
-          setTimeLeft(cleanSettings[mode] * (isDevMode ? 1 : 60));
-        }
-      } catch (error) {
-        console.error('Error loading settings:', error);
-      } finally {
-        if (mounted) setIsSettingsLoading(false);
-      }
-    }
-
-    loadSettings();
-    
-    return () => {
-      mounted = false;
-    };
-  }, [user.current, mode, isDevMode]);
-
-  // Save settings to Appwrite when they change
-  useEffect(() => {
-    async function saveSettings() {
-      if (!user?.current?.$id) return;
-
-      try {
-        const response = await databases.listDocuments(
-          DATABASE_ID,
-          'timer_settings',
-          [Query.equal('userId', user.current.$id)]
-        );
-
-        if (response.documents.length > 0) {
-          const doc = response.documents[0];
-          
-          console.log('Saving clean settings:', settings);
-          await databases.updateDocument(
-            DATABASE_ID,
-            'timer_settings',
-            doc.$id,
-            {
-              settings: JSON.stringify(settings)
-            }
-          );
-        }
-      } catch (error) {
-        console.error('Error saving settings:', error);
-      }
-    }
-
-    saveSettings();
-  }, [settings, user.current]);
-
+  // Timer countdown logic
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
     if (isActive && timeLeft > 0) {
       interval = setInterval(() => {
-        setTimeLeft((time) => time - 1);
+        setTimeLeft(time => time - 1);
       }, 1000);
-    } else if (timeLeft === 0) {
-      handleTimerComplete();
     }
 
     return () => clearInterval(interval);
   }, [isActive, timeLeft]);
 
-  const handleTimerComplete = () => {
-    // Play sound
-    alarmSound.current.currentTime = 0; // Reset to start
-    alarmSound.current.play();
-
-    // Show notification
-    if (Notification.permission === "granted") {
-      const notification = new Notification("Timer Complete!", {
-        body: "Time to take a break!",
-        icon: "/favicon.ico",
-        requireInteraction: true
-      });
-
-      const clickHandler = () => {
-        handleDismissDialog();
-        notification.removeEventListener('click', clickHandler);
-      };
-
-      notification.addEventListener('click', clickHandler);
-    }
-
-    setIsActive(false);
-    if (mode === 'work') {
-      setCompletedPomodoros(prev => prev + 1);
-      setMode(completedPomodoros % 4 === 3 ? 'longBreak' : 'shortBreak');
-    } else {
-      setMode('work');
-    }
-    setTimeLeft(settings[mode] * (isDevMode ? 1 : 60));
+  return {
+    timeLeft,
+    setTimeLeft,
+    isActive,
+    isRunning,
+    setIsRunning,
+    completedPomodoros,
+    setCompletedPomodoros,
+    resetTimer,
+    toggleTimer,
+    alarmSound
   };
+}
 
-  const handleDismissDialog = () => {
-    setShowCompletionDialog(false);
-    alarmSound.current.pause();
-    alarmSound.current.currentTime = 0;  // Reset the audio to the beginning
-  };
-
-  const toggleTimer = () => {
-    setIsActive(!isActive);
-  };
-
-  const resetTimer = () => {
-    setIsActive(false);
-    setTimeLeft(settings[mode] * (isDevMode ? 1 : 60));
-  };
-
-  const updateSettings = async (newSettings: TimerSettings) => {
-    setSettings(newSettings);
-    
-    if (!user?.current?.$id) {
-      console.log('No user ID found:', user);
-      return;
-    }
-    
-    try {
-      console.log('Trying to create document...');
-      const doc = await databases.createDocument(
-        import.meta.env.VITE_DATABASE_ID,
-        'timer_settings',
-        user.current.$id,
-        { 
-          userId: user.current.$id,
-          settings: JSON.stringify(newSettings) 
-        },
-        [
-          Permission.read(Role.user(user.current.$id)),
-          Permission.update(Role.user(user.current.$id)),
-          Permission.delete(Role.user(user.current.$id))
-        ]
-      );
-      console.log('Document created:', doc);
-    } catch (error) {
-      console.log('Create failed, trying update...', error);
-      try {
-        const doc = await databases.updateDocument(
-          import.meta.env.VITE_DATABASE_ID,
-          'timer_settings',
-          user.current.$id,
-          { 
-            userId: user.current.$id,
-            settings: JSON.stringify(newSettings) 
-          }
-        );
-        console.log('Document updated:', doc);
-      } catch (e) {
-        console.error('Error saving settings:', e);
-      }
-    }
-    
-    setTimeLeft(newSettings[mode] * (isDevMode ? 1 : 60));
-  };
-
-  const toggleDevMode = () => {
-    const newDevMode = !isDevMode;
-    setIsDevMode(newDevMode);
-    localStorage.setItem('devMode', String(newDevMode));
-    // Adjust current time left when toggling
-    setTimeLeft(prev => {
-      const minutes = Math.ceil(prev / (isDevMode ? 1 : 60));
-      return minutes * (newDevMode ? 1 : 60);
-    });
-  };
-
-  const formatTime = (seconds: number): string => {
-    if (isDevMode) {
-      return seconds.toString().padStart(2, '0');
-    }
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
+// Create a custom hook for mode transition logic
+function useModeTransition() {
+  const navigate = useNavigate();
+  const { setMode } = useTimer();
+  const user = useUser();
 
   const handleModeChange = useCallback(async (newMode: TimerMode) => {
     setMode(newMode);
-    setTimeLeft(settings[newMode] * (isDevMode ? 1 : 60));
-    setIsRunning(false);
-    setProgress(0);
-
-    // Use navigate instead of window.location for smoother transitions
+    
     if (newMode === 'shortBreak' || newMode === 'longBreak') {
-      navigate('/chat', { replace: true }); // Using replace to prevent back button issues
+      navigate('/chat', { replace: true });
     }
-  }, [navigate, settings, isDevMode, setMode]);
+  }, [navigate, setMode]);
 
-  const awardMicroLeons = async (amount: number) => {
-    if (!user?.current?.$id) {
-      console.log('No user ID found:', user);
-      return;
-    }
+  const awardMicroLeons = useCallback(async (amount: number) => {
+    if (!user?.current?.$id) return;
     
     try {
       const currentLeons = Number(user.current.prefs.microLeons) || 0;
       const newLeons = currentLeons + amount;
       
-      console.log('Current leons:', currentLeons);
-      console.log('Awarding amount:', amount);
-      console.log('New total:', newLeons);
-      
-      // Create a new prefs object with updated microLeons
       const updatedPrefs = {
         ...user.current.prefs,
         microLeons: newLeons.toString()
       };
       
       await account.updatePrefs(updatedPrefs);
-      
-      // Update the user context with new prefs without fetching from server
       user.updateUser({
         ...user.current,
         prefs: updatedPrefs
       });
-      
-      console.log('Successfully updated micro leons to:', newLeons);
     } catch (error) {
       console.error('Error awarding micro leons:', error);
     }
+  }, [user]);
+
+  return {
+    handleModeChange,
+    awardMicroLeons
   };
+}
 
-  useEffect(() => {
-    if (timeLeft === 0 && !isRunning) {
-      // Play the sound for 500ms
-      alarmSound.current.currentTime = 0;
-      alarmSound.current.play();
-      
-      setTimeout(() => {
-        alarmSound.current.pause();
-        alarmSound.current.currentTime = 0;
-      }, 500);
-      
-      let nextMode: TimerMode;
-      if (mode === 'work') {
-        const newCompletedPomodoros = completedPomodoros + 1;
-        setCompletedPomodoros(newCompletedPomodoros);
-        
-        // Award micro leons for completing work session
-        if (newCompletedPomodoros % settings.longBreakInterval === 0) {
-          nextMode = 'longBreak';
-          awardMicroLeons(50);
-        } else {
-          nextMode = 'shortBreak';
-          awardMicroLeons(10);
-        }
-        
-        setShowCompletionDialog(true);
-      } else {
-        nextMode = 'work';
-      }
-      
-      // Use handleModeChange instead of direct navigation
-      handleModeChange(nextMode);
-    }
-  }, [timeLeft, isRunning, mode, completedPomodoros, settings.longBreakInterval, handleModeChange]);
+// Create a proper Message type that extends Models.Document
+interface AppwriteMessage {
+  $id: string;
+  $collectionId: string;
+  $databaseId: string;
+  $createdAt: string;
+  $updatedAt: string;
+  $permissions: string[];
+  content: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  createdAt: string;
+}
 
-  // Clean up audio on unmount
-  useEffect(() => {
-    return () => {
-      alarmSound.current.pause();
-      alarmSound.current.currentTime = 0;
-    };
-  }, []);
+// Create a custom hook for chat functionality
+function useChat(user: ReturnType<typeof useUser>, mode: TimerMode) {
+  const [messages, setMessages] = useState<AppwriteMessage[]>([]);
+  const [newMessage, setNewMessage] = useState("");
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [isNearBottom, setIsNearBottom] = useState(true);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  // Chat functions
   const scrollToBottom = useCallback(() => {
     if (scrollAreaRef.current) {
       const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
@@ -387,7 +170,7 @@ export function Home() {
 
   const loadMessages = useCallback(async () => {
     try {
-      const response = await databases.listDocuments<Message>(
+      const response = await databases.listDocuments<AppwriteMessage>(
         DATABASE_ID,
         'messages',
         [
@@ -405,7 +188,6 @@ export function Home() {
     e.preventDefault();
     if (!newMessage.trim() || !user.current) return;
 
-    setIsLoading(true);
     try {
       await databases.createDocument(
         DATABASE_ID,
@@ -427,22 +209,14 @@ export function Home() {
       setNewMessage("");
     } catch (error) {
       console.error('Error sending message:', error);
-    } finally {
-      setIsLoading(false);
     }
   }, [newMessage, user.current]);
-
-  const formatMessageTime = useCallback((dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }, []);
 
   // Load messages when entering break mode
   useEffect(() => {
     if (mode === 'shortBreak' || mode === 'longBreak') {
       loadMessages();
       
-      // Create a new client for realtime
       const client = new Client()
         .setEndpoint('https://cloud.appwrite.io/v1')
         .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
@@ -451,7 +225,7 @@ export function Home() {
         `databases.${DATABASE_ID}.collections.messages.documents`
       ], response => {
         if (response.events.includes('databases.*.collections.*.documents.*.create')) {
-          const newMessage = response.payload as Message;
+          const newMessage = response.payload as AppwriteMessage;
           setMessages(prev => [...prev, newMessage]);
         }
       });
@@ -471,8 +245,179 @@ export function Home() {
     }
   }, [messages, isNearBottom, scrollToBottom]);
 
+  return {
+    messages,
+    newMessage,
+    setNewMessage,
+    showScrollButton,
+    isNearBottom,
+    scrollAreaRef,
+    scrollToBottom,
+    handleScroll,
+    sendMessage,
+    setShowScrollButton
+  };
+}
+
+// Create a custom hook for settings management
+function useSettings(user: ReturnType<typeof useUser>) {
+  const [settings, setSettings] = useState<TimerSettings>(DEFAULT_SETTINGS);
+  const [isSettingsLoading, setIsSettingsLoading] = useState(true);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Load settings from Appwrite
+  useEffect(() => {
+    let mounted = true;
+    
+    async function loadSettings() {
+      if (!user?.current?.$id) {
+        if (mounted) setIsSettingsLoading(false);
+        return;
+      }
+      
+      try {
+        const response = await databases.listDocuments(
+          DATABASE_ID,
+          'timer_settings',
+          [Query.equal('userId', user.current.$id)]
+        );
+
+        if (!mounted) return;
+
+        if (response.documents.length > 0) {
+          const doc = response.documents[0];
+          const parsedSettings = JSON.parse(doc.settings);
+          
+          const cleanSettings: TimerSettings = {
+            work: parsedSettings.work ?? DEFAULT_SETTINGS.work,
+            shortBreak: parsedSettings.shortBreak ?? DEFAULT_SETTINGS.shortBreak,
+            longBreak: parsedSettings.longBreak ?? DEFAULT_SETTINGS.longBreak,
+            longBreakInterval: parsedSettings.longBreakInterval ?? DEFAULT_SETTINGS.longBreakInterval
+          };
+          
+          setSettings(cleanSettings);
+        }
+      } catch (error) {
+        console.error('Error loading settings:', error);
+      } finally {
+        if (mounted) setIsSettingsLoading(false);
+      }
+    }
+
+    loadSettings();
+    return () => { mounted = false; };
+  }, [user.current]);
+
+  const saveSettings = useCallback(async (newSettings: TimerSettings) => {
+    if (!user?.current?.$id) {
+      console.warn('No user found, skipping settings save');
+      return;
+    }
+
+    try {
+      await databases.updateDocument(
+        DATABASE_ID,
+        'timer_settings',
+        user.current.$id,
+        { settings: JSON.stringify(newSettings) }
+      );
+    } catch (error) {
+      console.error('Error saving settings:', error);
+    }
+  }, [user]);
+
+  return {
+    settings,
+    setSettings,
+    isSettingsLoading,
+    isSettingsOpen,
+    setIsSettingsOpen,
+    saveSettings
+  };
+}
+
+export function Home() {
+  const user = useUser();
+  const { mode } = useTimer();
+  const [isDevMode, setIsDevMode] = useState(() => localStorage.getItem('devMode') === 'true');
+  const [showCompletionDialog, setShowCompletionDialog] = useState(false);
+
+  const {
+    settings,
+    setSettings,
+    isSettingsLoading,
+    isSettingsOpen,
+    setIsSettingsOpen,
+    saveSettings
+  } = useSettings(user);
+
+  const {
+    timeLeft,
+    setTimeLeft,
+    isActive,
+    isRunning,
+    setIsRunning,
+    completedPomodoros,
+    setCompletedPomodoros,
+    resetTimer,
+    toggleTimer,
+    alarmSound
+  } = useTimerLogic(settings, isDevMode, mode);
+
+  const { handleModeChange, awardMicroLeons } = useModeTransition();
+
+  const chat = useChat(user, mode);
+
+  // Handle timer completion
+  useEffect(() => {
+    if (timeLeft === 0 && !showCompletionDialog) {
+      alarmSound.current.currentTime = 0;
+      alarmSound.current.play();
+      
+      setTimeout(() => {
+        alarmSound.current.pause();
+        alarmSound.current.currentTime = 0;
+      }, 500);
+
+      if (mode === 'work') {
+        const newCompletedPomodoros = completedPomodoros + 1;
+        setCompletedPomodoros(newCompletedPomodoros);
+        
+        const reward = newCompletedPomodoros % settings.longBreakInterval === 0 ? 50 : 10;
+        awardMicroLeons(reward);
+        setShowCompletionDialog(true);
+      } else {
+        handleModeChange('work');
+        setTimeLeft(settings.work * (isDevMode ? 1 : 60));
+        setIsRunning(false);
+      }
+    }
+  }, [timeLeft, mode, completedPomodoros, settings, isDevMode, showCompletionDialog, handleModeChange, awardMicroLeons, setTimeLeft, setIsRunning]);
+
+  const handleCompletionDismiss = useCallback(() => {
+    setShowCompletionDialog(false);
+    const nextMode = completedPomodoros % settings.longBreakInterval === 0 ? 'longBreak' : 'shortBreak';
+    handleModeChange(nextMode);
+    setTimeLeft(settings[nextMode] * (isDevMode ? 1 : 60));
+    setIsRunning(false);
+  }, [completedPomodoros, settings, isDevMode, handleModeChange, setTimeLeft, setIsRunning]);
+
+  const formatTime = useCallback((seconds: number, isMessageTime?: boolean): string => {
+    if (isMessageTime) {
+      const date = new Date(seconds * 1000);
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    
+    if (isDevMode) {
+      return seconds.toString().padStart(2, '0');
+    }
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }, [isDevMode]);
+
   // Don't render until everything is loaded
-  if (isTimerLoading || isSettingsLoading) {
+  if (isSettingsLoading) {
     return null;
   }
 
@@ -485,7 +430,7 @@ export function Home() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={toggleDevMode}
+              onClick={() => setIsDevMode(!isDevMode)}
               className="text-xs"
             >
               {isDevMode ? '🐛 Dev' : '⏰ Normal'}
@@ -527,8 +472,8 @@ export function Home() {
               ))}
               <Button 
                 className="w-full mt-4"
-                onClick={async () => {
-                  await updateSettings(settings);
+                onClick={() => {
+                  saveSettings(settings);
                   setIsSettingsOpen(false);
                 }}
               >
@@ -592,11 +537,11 @@ export function Home() {
           <CardContent className="relative">
             <ScrollArea 
               className="h-[500px] pr-4 mb-4"
-              ref={scrollAreaRef}
-              onScrollCapture={handleScroll}
+              ref={chat.scrollAreaRef}
+              onScrollCapture={chat.handleScroll}
             >
               <div className="space-y-4">
-                {messages.map((message) => (
+                {chat.messages.map((message) => (
                   <div 
                     key={message.$id}
                     className={`flex items-start gap-3 ${
@@ -622,7 +567,7 @@ export function Home() {
                       <div className="flex items-center gap-2">
                         <span className="font-semibold">{message.userName}</span>
                         <span className="text-xs text-muted-foreground">
-                          {formatMessageTime(message.createdAt)}
+                          {formatTime(new Date(message.createdAt).getTime() / 1000, true)}
                         </span>
                       </div>
                       <p className={`text-sm mt-1 p-3 rounded-lg ${
@@ -638,30 +583,29 @@ export function Home() {
               </div>
             </ScrollArea>
 
-            {showScrollButton && !isNearBottom && (
+            {chat.showScrollButton && !chat.isNearBottom && (
               <Button
                 size="icon"
                 variant="secondary"
                 className="absolute bottom-16 right-8 rounded-full w-8 h-8 shadow-md"
                 onClick={() => {
-                  scrollToBottom();
-                  setShowScrollButton(false);
+                  chat.scrollToBottom();
+                  chat.setShowScrollButton(false);
                 }}
               >
                 <ChevronDown className="h-4 w-4" />
               </Button>
             )}
 
-            <form onSubmit={sendMessage} className="flex gap-4">
+            <form onSubmit={chat.sendMessage} className="flex gap-4">
               <Input 
                 placeholder="Type your message..." 
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                disabled={isLoading}
+                value={chat.newMessage}
+                onChange={(e) => chat.setNewMessage(e.target.value)}
                 className="flex-1"
               />
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Sending..." : "Send"}
+              <Button type="submit">
+                Send
               </Button>
             </form>
           </CardContent>
@@ -685,7 +629,7 @@ export function Home() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end">
-            <Button onClick={() => setShowCompletionDialog(false)}>
+            <Button onClick={handleCompletionDismiss}>
               Close
             </Button>
           </div>
