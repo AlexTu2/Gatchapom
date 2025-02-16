@@ -1,12 +1,14 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useUser } from "@/lib/context/user";
+import { useTimer } from "@/lib/context/timer";
 import { databases, DATABASE_ID, client, MESSAGES_COLLECTION_ID } from "@/lib/appwrite";
 import { ID, Models, Query, Permission, Role } from "appwrite";
 import { ChevronDown } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 interface Message extends Models.Document {
   content: string;
@@ -18,6 +20,8 @@ interface Message extends Models.Document {
 
 export function Chat() {
   const user = useUser();
+  const { mode } = useTimer();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -25,16 +29,16 @@ export function Chat() {
   const [isNearBottom, setIsNearBottom] = useState(true);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     if (scrollAreaRef.current) {
       const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
       if (scrollContainer) {
         scrollContainer.scrollTop = scrollContainer.scrollHeight;
       }
     }
-  };
+  }, []);
 
-  const handleScroll = () => {
+  const handleScroll = useCallback(() => {
     if (scrollAreaRef.current) {
       const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
       if (scrollContainer) {
@@ -43,37 +47,9 @@ export function Chat() {
         setIsNearBottom(isBottom);
       }
     }
-  };
-
-  // Auto-scroll only if we're near the bottom
-  useEffect(() => {
-    if (isNearBottom) {
-      setTimeout(scrollToBottom, 100);
-    } else {
-      setShowScrollButton(true);
-    }
-  }, [messages]);
-
-  useEffect(() => {
-    // Load initial messages
-    loadMessages();
-
-    // Subscribe to new messages
-    const unsubscribe = client.subscribe([
-      `databases.${DATABASE_ID}.collections.${MESSAGES_COLLECTION_ID}.documents`
-    ], response => {
-      if (response.events.includes('databases.*.collections.*.documents.*.create')) {
-        const newMessage = response.payload as Message;
-        setMessages(prev => [...prev, newMessage]);
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
   }, []);
 
-  const loadMessages = async () => {
+  const loadMessages = useCallback(async () => {
     try {
       const response = await databases.listDocuments<Message>(
         DATABASE_ID,
@@ -87,9 +63,9 @@ export function Chat() {
     } catch (error) {
       console.error('Error loading messages:', error);
     }
-  };
+  }, []);
 
-  const sendMessage = async (e: React.FormEvent) => {
+  const sendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !user.current) return;
 
@@ -118,12 +94,51 @@ export function Chat() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [newMessage, user.current]);
 
-  const formatTime = (dateString: string) => {
+  const formatTime = useCallback((dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
+  }, []);
+
+  // Redirect if not in break mode
+  useEffect(() => {
+    if (mode === 'work') {
+      navigate('/');
+    }
+  }, [mode, navigate]);
+
+  // Auto-scroll only if we're near the bottom
+  useEffect(() => {
+    if (isNearBottom) {
+      setTimeout(scrollToBottom, 100);
+    } else {
+      setShowScrollButton(true);
+    }
+  }, [messages, isNearBottom, scrollToBottom]);
+
+  // Load initial messages and subscribe to new ones
+  useEffect(() => {
+    loadMessages();
+
+    const unsubscribe = client.subscribe([
+      `databases.${DATABASE_ID}.collections.${MESSAGES_COLLECTION_ID}.documents`
+    ], response => {
+      if (response.events.includes('databases.*.collections.*.documents.*.create')) {
+        const newMessage = response.payload as Message;
+        setMessages(prev => [...prev, newMessage]);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [loadMessages]);
+
+  // If in work mode, show nothing while redirecting
+  if (mode === 'work') {
+    return null;
+  }
 
   return (
     <div className="container mx-auto">

@@ -2,10 +2,12 @@ import { Login } from "@/pages/Login";
 import { Home } from "@/pages/Home";  
 import { Profile } from "@/pages/Profile";
 import { UserProvider } from "./lib/context/user";
+import { TimerProvider } from "./lib/context/timer";
 import { Navbar } from "@/components/Navbar";
 import { useEffect } from "react";
 import { useUser } from "./lib/context/user";
 import { Chat } from "@/pages/Chat";
+import { BrowserRouter } from "react-router-dom";
 
 function AppRoutes() {
   const user = useUser();
@@ -50,9 +52,13 @@ function AppContent() {
 
 function App() {
   return (
-    <UserProvider>
-      <AppContent />
-    </UserProvider>
+    <BrowserRouter>
+      <UserProvider>
+        <TimerProvider>
+          <AppContent />
+        </TimerProvider>
+      </UserProvider>
+    </BrowserRouter>
   );
 }
 
