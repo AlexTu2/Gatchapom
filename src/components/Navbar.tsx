@@ -23,13 +23,21 @@ export function Navbar() {
   return (
     <nav className="border-b bg-white">
       <div className="flex justify-between items-center p-4 container mx-auto">
-        <Button 
-          variant="ghost" 
-          className="text-xl font-bold"
-          onClick={() => window.location.href = '/'}
-        >
-          Pomodoro Timer
-        </Button>
+        <div className="flex items-center gap-4">
+          <Button 
+            variant="ghost" 
+            className="text-xl font-bold"
+            onClick={() => window.location.href = '/'}
+          >
+            Pomodoro Timer
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => window.location.href = '/chat'}
+          >
+            Chat
+          </Button>
+        </div>
         
         {user.current && (
           <div className="flex items-center gap-3">
