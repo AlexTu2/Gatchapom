@@ -28,16 +28,6 @@ const DEFAULT_SETTINGS: TimerSettings = {
   longBreakInterval: 4
 };
 
-const alarmSound = new Audio("/alarm.mp3"); // You'll need to add an alarm sound file to your public folder
-
-interface Message extends Models.Document {
-  content: string;
-  userId: string;
-  userName: string;
-  userAvatar?: string;
-  createdAt: string;
-}
-
 export function Home() {
   const user = useUser();
   const navigate = useNavigate();
@@ -63,6 +53,9 @@ export function Home() {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isNearBottom, setIsNearBottom] = useState(true);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  // Create a single audio instance
+  const alarmSound = useRef(new Audio('/alarm.mp3'));
 
   // Load settings from Appwrite
   useEffect(() => {
@@ -171,8 +164,8 @@ export function Home() {
 
   const handleTimerComplete = () => {
     // Play sound
-    alarmSound.play();
-    setShowCompletionDialog(true);
+    alarmSound.current.currentTime = 0; // Reset to start
+    alarmSound.current.play();
 
     // Show notification
     if (Notification.permission === "granted") {
@@ -202,8 +195,8 @@ export function Home() {
 
   const handleDismissDialog = () => {
     setShowCompletionDialog(false);
-    alarmSound.pause();
-    alarmSound.currentTime = 0;  // Reset the audio to the beginning
+    alarmSound.current.pause();
+    alarmSound.current.currentTime = 0;  // Reset the audio to the beginning
   };
 
   const toggleTimer = () => {
@@ -296,6 +289,16 @@ export function Home() {
   // Add console logs to debug
   useEffect(() => {
     if (timeLeft === 0 && !isRunning) {
+      // Start from beginning and play for 500ms (1/2 second)
+      alarmSound.current.currentTime = 0;
+      alarmSound.current.play();
+      
+      // Stop after 500ms
+      setTimeout(() => {
+        alarmSound.current.pause();
+        alarmSound.current.currentTime = 0;
+      }, 500);
+      
       let nextMode: TimerMode;
       if (mode === 'work') {
         const newCompletedPomodoros = completedPomodoros + 1;
@@ -305,7 +308,6 @@ export function Home() {
         
         setCompletedPomodoros(newCompletedPomodoros);
         
-        // Use settings.longBreakInterval instead of the state variable
         if (newCompletedPomodoros % settings.longBreakInterval === 0) {
           console.log('Starting long break');
           nextMode = 'longBreak';
@@ -323,6 +325,14 @@ export function Home() {
       handleModeChange(nextMode);
     }
   }, [timeLeft, isRunning, mode, completedPomodoros, settings.longBreakInterval]);
+
+  // Clean up audio on unmount
+  useEffect(() => {
+    return () => {
+      alarmSound.current.pause();
+      alarmSound.current.currentTime = 0;
+    };
+  }, []);
 
   // Chat functions
   const scrollToBottom = useCallback(() => {

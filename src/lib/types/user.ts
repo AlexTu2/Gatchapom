@@ -17,4 +17,13 @@ export interface UserContextType {
   logout: () => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
   updateAvatar: (fileId: string) => Promise<void>;
+}
+
+export interface Message {
+  $id: string;
+  content: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  createdAt: string;
 } 
