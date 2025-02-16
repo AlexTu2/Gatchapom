@@ -6,14 +6,12 @@ import { TimerProvider } from "./lib/context/timer";
 import { Navbar } from "@/components/Navbar";
 import { useEffect } from "react";
 import { useUser } from "./lib/context/user";
-import { Chat } from "@/pages/Chat";
 import { BrowserRouter } from "react-router-dom";
 
 function AppRoutes() {
   const user = useUser();
   const isLoginPage = window.location.pathname === "/login";
   const isProfilePage = window.location.pathname === "/profile";
-  const isChatPage = window.location.pathname === "/chat";
 
   if (!user.current && !isLoginPage) {
     window.location.replace("/login");
@@ -22,7 +20,6 @@ function AppRoutes() {
 
   return isLoginPage ? <Login /> : 
          isProfilePage ? <Profile /> :
-         isChatPage ? <Chat /> :
          <Home />;
 }
 

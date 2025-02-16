@@ -31,10 +31,8 @@ const DEFAULT_SETTINGS: TimerSettings = {
 export function Home() {
   const user = useUser();
   const navigate = useNavigate();
-  const { mode, setMode } = useTimer();
-  const [settings, setSettings] = useState<TimerSettings>(() => {
-    return {} as TimerSettings;
-  });
+  const { mode, setMode, isLoading: isTimerLoading } = useTimer();
+  const [settings, setSettings] = useState<TimerSettings>(DEFAULT_SETTINGS);
   const [isDevMode, setIsDevMode] = useState(() => {
     return localStorage.getItem('devMode') === 'true';
   });
@@ -45,11 +43,12 @@ export function Home() {
   const [showCompletionDialog, setShowCompletionDialog] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [isSettingsLoading, setIsSettingsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Chat states
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isNearBottom, setIsNearBottom] = useState(true);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -59,30 +58,39 @@ export function Home() {
 
   // Load settings from Appwrite
   useEffect(() => {
+    let mounted = true;
+    
     async function loadSettings() {
-      if (!user?.current?.$id) return;
+      if (!user?.current?.$id) {
+        setIsSettingsLoading(false);
+        return;
+      }
       
       try {
+        setIsSettingsLoading(true);
         const response = await databases.listDocuments(
           DATABASE_ID,
           'timer_settings',
           [Query.equal('userId', user.current.$id)]
         );
 
+        if (!mounted) return;
+
         if (response.documents.length > 0) {
           const doc = response.documents[0];
           console.log('Found existing settings:', doc);
           const parsedSettings = JSON.parse(doc.settings);
           
-          // Merge with default settings to ensure all fields exist
-          const mergedSettings = {
-            ...DEFAULT_SETTINGS,
-            ...parsedSettings,
+          const cleanSettings: TimerSettings = {
+            work: parsedSettings.work ?? DEFAULT_SETTINGS.work,
+            shortBreak: parsedSettings.shortBreak ?? DEFAULT_SETTINGS.shortBreak,
+            longBreak: parsedSettings.longBreak ?? DEFAULT_SETTINGS.longBreak,
+            longBreakInterval: parsedSettings.longBreakInterval ?? DEFAULT_SETTINGS.longBreakInterval
           };
           
-          console.log('Merged settings:', mergedSettings);
-          setSettings(mergedSettings);
-          setTimeLeft(mergedSettings[mode] * (isDevMode ? 1 : 60));
+          console.log('Cleaned settings:', cleanSettings);
+          setSettings(cleanSettings);
+          setTimeLeft(cleanSettings[mode] * (isDevMode ? 1 : 60));
         } else {
           console.log('Creating new settings with defaults:', DEFAULT_SETTINGS);
           const doc = await databases.createDocument(
@@ -104,10 +112,18 @@ export function Home() {
         }
       } catch (error) {
         console.error('Error loading settings:', error);
+      } finally {
+        if (mounted) {
+          setIsSettingsLoading(false);
+        }
       }
     }
 
     loadSettings();
+    
+    return () => {
+      mounted = false;
+    };
   }, [user.current, mode, isDevMode]);
 
   // Save settings to Appwrite when they change
@@ -124,19 +140,14 @@ export function Home() {
 
         if (response.documents.length > 0) {
           const doc = response.documents[0];
-          const currentSettings = {
-            ...settings,
-            completedPomodoros,
-            currentMode: mode
-          };
           
-          console.log('Saving settings:', currentSettings);
+          console.log('Saving clean settings:', settings);
           await databases.updateDocument(
             DATABASE_ID,
             'timer_settings',
             doc.$id,
             {
-              settings: JSON.stringify(currentSettings)
+              settings: JSON.stringify(settings)
             }
           );
         }
@@ -146,7 +157,7 @@ export function Home() {
     }
 
     saveSettings();
-  }, [settings, completedPomodoros, mode, user.current]);
+  }, [settings, user.current]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -435,6 +446,11 @@ export function Home() {
       setShowScrollButton(true);
     }
   }, [messages, isNearBottom, scrollToBottom]);
+
+  // Don't render until everything is loaded
+  if (isTimerLoading || isSettingsLoading) {
+    return null;
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">

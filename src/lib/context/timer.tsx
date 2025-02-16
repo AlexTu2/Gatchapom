@@ -8,20 +8,26 @@ export type TimerMode = 'work' | 'shortBreak' | 'longBreak';
 interface TimerContextType {
   mode: TimerMode;
   setMode: (mode: TimerMode) => void;
+  isLoading: boolean;
 }
 
 const TimerContext = createContext<TimerContextType | undefined>(undefined);
 
 export function TimerProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<TimerMode>('work');
+  const [isLoading, setIsLoading] = useState(true);
   const user = useUser();
 
   // Load timer state from Appwrite when user logs in
   useEffect(() => {
     async function loadTimerState() {
-      if (!user?.current?.$id) return;
+      if (!user?.current?.$id) {
+        setIsLoading(false);
+        return;
+      }
 
       try {
+        setIsLoading(true);
         const response = await databases.listDocuments(
           DATABASE_ID,
           'timer_settings',
@@ -34,6 +40,8 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         console.error('Error loading timer state:', error);
+      } finally {
+        setIsLoading(false);
       }
     }
 
@@ -77,7 +85,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   }, [mode, user.current]);
 
   return (
-    <TimerContext.Provider value={{ mode, setMode }}>
+    <TimerContext.Provider value={{ mode, setMode, isLoading }}>
       {children}
     </TimerContext.Provider>
   );
