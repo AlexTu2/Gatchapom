@@ -4,13 +4,23 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUser } from "../lib/context/user";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { databases, DATABASE_ID, client, MESSAGES_COLLECTION_ID } from "../lib/appwrite";
-import { ID, Permission, Role, Query, Models } from "appwrite";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { databases, DATABASE_ID, account } from "../lib/appwrite";
+import { ID, Permission, Role, Query } from "appwrite";
 import { useTimer } from "@/lib/context/timer";
 import { useNavigate } from 'react-router-dom';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronDown } from "lucide-react";
+import { Client } from "appwrite";
+
+interface Message {
+  $id: string;
+  content: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  createdAt: string;
+}
 
 type TimerMode = 'work' | 'shortBreak' | 'longBreak';
 
@@ -36,7 +46,7 @@ export function Home() {
   const [isDevMode, setIsDevMode] = useState(() => {
     return localStorage.getItem('devMode') === 'true';
   });
-  const [timeLeft, setTimeLeft] = useState(settings[mode] * (isDevMode ? 1 : 60));
+  const [timeLeft, setTimeLeft] = useState(DEFAULT_SETTINGS[mode] * (isDevMode ? 1 : 60));
   const [isActive, setIsActive] = useState(false);
   const [completedPomodoros, setCompletedPomodoros] = useState(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -62,12 +72,11 @@ export function Home() {
     
     async function loadSettings() {
       if (!user?.current?.$id) {
-        setIsSettingsLoading(false);
+        if (mounted) setIsSettingsLoading(false);
         return;
       }
       
       try {
-        setIsSettingsLoading(true);
         const response = await databases.listDocuments(
           DATABASE_ID,
           'timer_settings',
@@ -91,31 +100,11 @@ export function Home() {
           console.log('Cleaned settings:', cleanSettings);
           setSettings(cleanSettings);
           setTimeLeft(cleanSettings[mode] * (isDevMode ? 1 : 60));
-        } else {
-          console.log('Creating new settings with defaults:', DEFAULT_SETTINGS);
-          const doc = await databases.createDocument(
-            DATABASE_ID,
-            'timer_settings',
-            ID.unique(),
-            {
-              userId: user.current.$id,
-              settings: JSON.stringify(DEFAULT_SETTINGS)
-            },
-            [
-              Permission.read(Role.user(user.current.$id)),
-              Permission.update(Role.user(user.current.$id)),
-              Permission.delete(Role.user(user.current.$id))
-            ]
-          );
-          setSettings(DEFAULT_SETTINGS);
-          setTimeLeft(DEFAULT_SETTINGS[mode] * (isDevMode ? 1 : 60));
         }
       } catch (error) {
         console.error('Error loading settings:', error);
       } finally {
-        if (mounted) {
-          setIsSettingsLoading(false);
-        }
+        if (mounted) setIsSettingsLoading(false);
       }
     }
 
@@ -291,20 +280,52 @@ export function Home() {
     setIsRunning(false);
     setProgress(0);
 
-    // Navigate to chat when break starts
+    // Use navigate instead of window.location for smoother transitions
     if (newMode === 'shortBreak' || newMode === 'longBreak') {
-      setTimeout(() => navigate('/chat'), 0);
+      navigate('/chat', { replace: true }); // Using replace to prevent back button issues
     }
   }, [navigate, settings, isDevMode, setMode]);
 
-  // Add console logs to debug
+  const awardMicroLeons = async (amount: number) => {
+    if (!user?.current?.$id) {
+      console.log('No user ID found:', user);
+      return;
+    }
+    
+    try {
+      const currentLeons = Number(user.current.prefs.microLeons) || 0;
+      const newLeons = currentLeons + amount;
+      
+      console.log('Current leons:', currentLeons);
+      console.log('Awarding amount:', amount);
+      console.log('New total:', newLeons);
+      
+      // Create a new prefs object with updated microLeons
+      const updatedPrefs = {
+        ...user.current.prefs,
+        microLeons: newLeons.toString()
+      };
+      
+      await account.updatePrefs(updatedPrefs);
+      
+      // Update the user context with new prefs without fetching from server
+      user.updateUser({
+        ...user.current,
+        prefs: updatedPrefs
+      });
+      
+      console.log('Successfully updated micro leons to:', newLeons);
+    } catch (error) {
+      console.error('Error awarding micro leons:', error);
+    }
+  };
+
   useEffect(() => {
     if (timeLeft === 0 && !isRunning) {
-      // Start from beginning and play for 500ms (1/2 second)
+      // Play the sound for 500ms
       alarmSound.current.currentTime = 0;
       alarmSound.current.play();
       
-      // Stop after 500ms
       setTimeout(() => {
         alarmSound.current.pause();
         alarmSound.current.currentTime = 0;
@@ -313,18 +334,15 @@ export function Home() {
       let nextMode: TimerMode;
       if (mode === 'work') {
         const newCompletedPomodoros = completedPomodoros + 1;
-        console.log('Completed pomodoros:', newCompletedPomodoros);
-        console.log('Long break interval:', settings.longBreakInterval);
-        console.log('Is long break?', newCompletedPomodoros % settings.longBreakInterval === 0);
-        
         setCompletedPomodoros(newCompletedPomodoros);
         
+        // Award micro leons for completing work session
         if (newCompletedPomodoros % settings.longBreakInterval === 0) {
-          console.log('Starting long break');
           nextMode = 'longBreak';
+          awardMicroLeons(50);
         } else {
-          console.log('Starting short break');
           nextMode = 'shortBreak';
+          awardMicroLeons(10);
         }
         
         setShowCompletionDialog(true);
@@ -332,10 +350,10 @@ export function Home() {
         nextMode = 'work';
       }
       
-      console.log('Next mode:', nextMode);
+      // Use handleModeChange instead of direct navigation
       handleModeChange(nextMode);
     }
-  }, [timeLeft, isRunning, mode, completedPomodoros, settings.longBreakInterval]);
+  }, [timeLeft, isRunning, mode, completedPomodoros, settings.longBreakInterval, handleModeChange]);
 
   // Clean up audio on unmount
   useEffect(() => {
@@ -370,7 +388,7 @@ export function Home() {
     try {
       const response = await databases.listDocuments<Message>(
         DATABASE_ID,
-        MESSAGES_COLLECTION_ID,
+        'messages',
         [
           Query.orderDesc('createdAt'),
           Query.limit(50)
@@ -390,7 +408,7 @@ export function Home() {
     try {
       await databases.createDocument(
         DATABASE_ID,
-        MESSAGES_COLLECTION_ID,
+        'messages',
         ID.unique(),
         {
           content: newMessage.trim(),
@@ -423,8 +441,13 @@ export function Home() {
     if (mode === 'shortBreak' || mode === 'longBreak') {
       loadMessages();
       
+      // Create a new client for realtime
+      const client = new Client()
+        .setEndpoint('https://cloud.appwrite.io/v1')
+        .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
+      
       const unsubscribe = client.subscribe([
-        `databases.${DATABASE_ID}.collections.${MESSAGES_COLLECTION_ID}.documents`
+        `databases.${DATABASE_ID}.collections.messages.documents`
       ], response => {
         if (response.events.includes('databases.*.collections.*.documents.*.create')) {
           const newMessage = response.payload as Message;
@@ -454,7 +477,7 @@ export function Home() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md mx-auto">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-2xl font-bold">Pomodoro Timer</CardTitle>
           <div className="flex items-center gap-2">
@@ -644,14 +667,17 @@ export function Home() {
         </Card>
       )}
 
-      <Dialog open={showCompletionDialog} onOpenChange={handleDismissDialog}>
-        <DialogContent className="sm:max-w-md">
+      <Dialog open={showCompletionDialog} onOpenChange={setShowCompletionDialog}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Timer Complete!</DialogTitle>
+            <DialogTitle>Pomodoro Complete!</DialogTitle>
+            <DialogDescription>
+              Great job! You've completed a work session. Take a break and come back refreshed.
+            </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-center space-x-4 mt-4">
-            <Button onClick={handleDismissDialog}>
-              Dismiss
+          <div className="flex justify-end">
+            <Button onClick={() => setShowCompletionDialog(false)}>
+              Close
             </Button>
           </div>
         </DialogContent>

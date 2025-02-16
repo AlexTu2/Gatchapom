@@ -2,39 +2,40 @@ import { ID } from "appwrite";
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { account, BUCKET_ID, storage } from "../appwrite";
 import type { UserPrefs, UserContextType } from '../types/user';
+import { Models } from "appwrite";
 
-const UserContext = createContext<UserContextType>({ current: null, login: async () => {}, logout: async () => {}, register: async () => {}, updateAvatar: async () => {} });
+interface UserContextType {
+  current: Models.User<Models.Preferences> | null;
+  login: () => void;
+  logout: () => void;
+  register: (username: string, email: string, password: string) => void;
+  updateAvatar: (fileId: string) => void;
+  updateUser: (user: Models.User<Models.Preferences>) => void;
+}
+
+const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserContextType['current']>(null);
+  const [user, setUser] = useState<Models.User<Models.Preferences> | null>(null);
 
   useEffect(() => {
+    // Check if user is logged in
     account.get()
-      .then(response => {
-        if (!response.prefs) {
-          account.updatePrefs({
-            avatarId: undefined,
-            avatarUrl: undefined
-          })
-            .then(() => {
-              setUser({ ...response, prefs: {
-                avatarId: undefined,
-                avatarUrl: undefined
-              }});
-            })
-            .catch(error => {
-              console.error('Failed to update preferences:', error);
-              setUser(null);
-            });
+      .then(async (response) => {
+        // Initialize preferences if they don't exist
+        if (!response.prefs?.avatarUrl && !response.prefs?.microLeons) {
+          await account.updatePrefs({
+            avatarUrl: null,
+            microLeons: "0",
+          });
+          // Fetch updated user data
+          const updatedUser = await account.get();
+          setUser(updatedUser);
         } else {
-          setUser({ ...response, prefs: {
-            avatarId: response.prefs.avatarId ?? undefined,
-            avatarUrl: response.prefs.avatarUrl ?? undefined
-          }});
+          setUser(response);
         }
       })
-      .catch(error => {
-        console.error('Failed to fetch user:', error);
+      .catch(() => {
         setUser(null);
       });
   }, []);
@@ -62,26 +63,20 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function login(email: string, password: string) {
+  const login = () => {
+    const redirectUrl = `${window.location.origin}/`;
+    account.createOAuth2Session('github', redirectUrl, redirectUrl);
+  };
+
+  const logout = async () => {
     try {
-      await account.createEmailPasswordSession(email, password);
-      const loggedInUser = await account.get();
-      if (!loggedInUser.prefs) {
-        const updatedUser = await account.updatePrefs({
-          avatarId: undefined,
-          avatarUrl: undefined
-        });
-        const typedPrefs = updatedUser as unknown as UserPrefs;
-        setUser({ ...loggedInUser, prefs: typedPrefs });
-      } else {
-        setUser({ ...loggedInUser, prefs: loggedInUser.prefs as UserPrefs });
-      }
-      window.location.replace("/");
+      await account.deleteSession('current');
+      setUser(null);
+      window.location.href = '/';
     } catch (error) {
-      console.error('Login error:', error);
-      throw error;
+      console.error('Error logging out:', error);
     }
-  }
+  };
 
   async function register(username: string, email: string, password: string) {
     try {
@@ -101,16 +96,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function logout() {
-    try {
-      await account.deleteSession('current');
-      setUser(null);
-      window.location.replace("/login");
-    } catch (error) {
-      console.error('Logout error:', error);
-      throw error;
-    }
-  }
+  const updateUser = (updatedUser: Models.User<Models.Preferences>) => {
+    setUser(updatedUser);
+  };
 
   return (
     <UserContext.Provider value={{ 
@@ -121,7 +109,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
       updateAvatar: async (fileId: string) => {
         await updateAvatar(fileId);
         return;
-      }
+      },
+      updateUser
     }}>
       {children}
     </UserContext.Provider>
