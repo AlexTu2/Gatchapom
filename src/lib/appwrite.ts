@@ -6,6 +6,7 @@ declare global {
         VITE_APPWRITE_PROJECT_ID: string;
         VITE_BUCKET_ID: string;
         VITE_DATABASE_ID: string;
+        VITE_MESSAGES_COLLECTION_ID: string;
     }
 }
 
@@ -21,6 +22,7 @@ export { ID };
 // Constants
 export const BUCKET_ID = import.meta.env.VITE_BUCKET_ID;
 export const DATABASE_ID = import.meta.env.VITE_DATABASE_ID;
+export const MESSAGES_COLLECTION_ID = import.meta.env.VITE_MESSAGES_COLLECTION_ID;
 
 // Helper function to get avatar URL
 export function getAvatarUrl(fileId: string) {

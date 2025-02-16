@@ -5,11 +5,13 @@ import { UserProvider } from "./lib/context/user";
 import { Navbar } from "@/components/Navbar";
 import { useEffect } from "react";
 import { useUser } from "./lib/context/user";
+import { Chat } from "@/pages/Chat";
 
 function AppRoutes() {
   const user = useUser();
   const isLoginPage = window.location.pathname === "/login";
   const isProfilePage = window.location.pathname === "/profile";
+  const isChatPage = window.location.pathname === "/chat";
 
   if (!user.current && !isLoginPage) {
     window.location.replace("/login");
@@ -17,7 +19,8 @@ function AppRoutes() {
   }
 
   return isLoginPage ? <Login /> : 
-         isProfilePage ? <Profile /> : 
+         isProfilePage ? <Profile /> :
+         isChatPage ? <Chat /> :
          <Home />;
 }
 
