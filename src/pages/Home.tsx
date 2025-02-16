@@ -72,7 +72,6 @@ function useTimerLogic(settings: TimerSettings, isDevMode: boolean, mode: TimerM
   return {
     timeLeft,
     setTimeLeft,
-    isActive,
     isRunning,
     setIsRunning,
     completedPomodoros,
@@ -85,17 +84,12 @@ function useTimerLogic(settings: TimerSettings, isDevMode: boolean, mode: TimerM
 
 // Create a custom hook for mode transition logic
 function useModeTransition() {
-  const navigate = useNavigate();
   const { setMode } = useTimer();
   const user = useUser();
 
   const handleModeChange = useCallback(async (newMode: TimerMode) => {
     setMode(newMode);
-    
-    if (newMode === 'shortBreak' || newMode === 'longBreak') {
-      navigate('/chat', { replace: true });
-    }
-  }, [navigate, setMode]);
+  }, [setMode]);
 
   const awardMicroLeons = useCallback(async (amount: number) => {
     if (!user?.current?.$id) return;
@@ -354,7 +348,6 @@ export function Home() {
   const {
     timeLeft,
     setTimeLeft,
-    isActive,
     isRunning,
     setIsRunning,
     completedPomodoros,
@@ -616,16 +609,18 @@ export function Home() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Pomodoro Complete!</DialogTitle>
-            <DialogDescription className="space-y-2">
-              <p>Great job! You've completed a work session.</p>
-              <p className="font-medium text-yellow-600 flex items-center gap-2">
-                <img 
-                  src="/learnwithleon/microLeon.png" 
-                  alt="Micro Leon" 
-                  className="h-16 w-16"
-                />
-                You earned {completedPomodoros % settings.longBreakInterval === 0 ? '50' : '10'} micro leons!
-              </p>
+            <DialogDescription asChild>
+              <div className="space-y-2">
+                <div>Great job! You've completed a work session.</div>
+                <div className="font-medium text-yellow-600 flex items-center gap-2">
+                  <img 
+                    src="/learnwithleon/microLeon.png" 
+                    alt="Micro Leon" 
+                    className="h-16 w-16"
+                  />
+                  You earned {completedPomodoros % settings.longBreakInterval === 0 ? '50' : '10'} micro leons!
+                </div>
+              </div>
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end">

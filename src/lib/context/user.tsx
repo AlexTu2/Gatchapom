@@ -3,9 +3,11 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { account, BUCKET_ID, storage } from "../appwrite";
 import type { UserPrefs } from '../types/user';
 import { Models } from "appwrite";
+import { useNavigate } from 'react-router-dom';
 
 interface UserContextType {
   current: Models.User<Models.Preferences> | null;
+  isLoading: boolean;
   login: (email: string, password: string) => void;
   logout: () => void;
   register: (username: string, email: string, password: string) => void;
@@ -17,6 +19,8 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Models.User<Models.Preferences> | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Check if user is logged in
@@ -27,6 +31,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           await account.updatePrefs({
             avatarUrl: null,
             microLeons: "0",
+            unlockedStickers: "[]"
           });
           // Fetch updated user data
           const updatedUser = await account.get();
@@ -37,6 +42,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         setUser(null);
+      })
+      .finally(() => {
+        setIsLoading(false);
       });
   }, []);
 
@@ -68,7 +76,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       await account.createEmailPasswordSession(email, password);
       const response = await account.get();
       setUser(response);
-      window.location.href = '/';
+      navigate('/');  // Use navigate instead of window.location
     } catch (error) {
       console.error('Login error:', error);
       throw error;
@@ -79,29 +87,31 @@ export function UserProvider({ children }: { children: ReactNode }) {
     try {
       await account.deleteSession('current');
       setUser(null);
-      window.location.href = '/';
+      navigate('/login');  // Use navigate instead of window.location
     } catch (error) {
       console.error('Error logging out:', error);
     }
   };
 
-  async function register(username: string, email: string, password: string) {
+  const register = async (username: string, email: string, password: string) => {
     try {
       await account.create(ID.unique(), email, password, username);
       await account.createEmailPasswordSession(email, password);
       const loggedInUser = await account.get();
       const updatedUser = await account.updatePrefs({
         avatarId: undefined,
-        avatarUrl: undefined
+        avatarUrl: undefined,
+        microLeons: "0",
+        unlockedStickers: "[]"
       });
       const typedPrefs = updatedUser as unknown as UserPrefs;
       setUser({ ...loggedInUser, prefs: typedPrefs });
-      window.location.replace("/");
+      navigate('/');  // Use navigate instead of window.location
     } catch (error) {
       console.error('Registration error:', error);
       throw error;
     }
-  }
+  };
 
   const updateUser = (updatedUser: Models.User<Models.Preferences>) => {
     setUser(updatedUser);
@@ -110,6 +120,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   return (
     <UserContext.Provider value={{ 
       current: user, 
+      isLoading,
       login, 
       logout,
       register,

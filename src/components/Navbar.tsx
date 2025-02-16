@@ -7,10 +7,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 export function Navbar() {
   const user = useUser();
+  const navigate = useNavigate();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [microLeons, setMicroLeons] = useState(0);
 
@@ -36,6 +37,11 @@ export function Navbar() {
   }, [user.current?.prefs?.microLeons]);
 
   console.log('Current avatarUrl state:', avatarUrl);
+
+  const handleLogout = async () => {
+    await user.logout();
+    navigate('/login');
+  };
 
   return (
     <nav className="border-b bg-white">
@@ -88,7 +94,7 @@ export function Navbar() {
                 <DropdownMenuItem asChild>
                   <Link to="/profile">Profile</Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => user.logout()}>
+                <DropdownMenuItem onClick={handleLogout}>
                   Logout
                 </DropdownMenuItem>
               </DropdownMenuContent>

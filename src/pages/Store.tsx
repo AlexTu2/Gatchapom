@@ -174,8 +174,18 @@ export function Store() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>New Sticker Unlocked! 🎉</DialogTitle>
-            <DialogDescription>
-              You've unlocked a new sticker for your collection!
+            <DialogDescription asChild>
+              <div className="space-y-2">
+                <div>You've unlocked a new sticker for your collection!</div>
+                <div className="font-medium text-yellow-600 flex items-center gap-2">
+                  <img 
+                    src="/learnwithleon/microLeon.png" 
+                    alt="Micro Leon" 
+                    className="h-16 w-16"
+                  />
+                  You spent {BOOSTER_PACK_COST} micro leons!
+                </div>
+              </div>
             </DialogDescription>
           </DialogHeader>
           {currentSticker && (
