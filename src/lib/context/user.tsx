@@ -6,7 +6,7 @@ import { Models } from "appwrite";
 
 interface UserContextType {
   current: Models.User<Models.Preferences> | null;
-  login: () => void;
+  login: (email: string, password: string) => void;
   logout: () => void;
   register: (username: string, email: string, password: string) => void;
   updateAvatar: (fileId: string) => void;
@@ -63,9 +63,16 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const login = () => {
-    const redirectUrl = `${window.location.origin}/`;
-    account.createOAuth2Session('github', redirectUrl, redirectUrl);
+  const login = async (email: string, password: string) => {
+    try {
+      await account.createEmailPasswordSession(email, password);
+      const response = await account.get();
+      setUser(response);
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
   };
 
   const logout = async () => {
