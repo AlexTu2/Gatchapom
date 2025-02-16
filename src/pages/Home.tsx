@@ -18,12 +18,14 @@ interface TimerSettings {
   work: number;
   shortBreak: number;
   longBreak: number;
+  longBreakInterval: number;
 }
 
 const DEFAULT_SETTINGS: TimerSettings = {
   work: 25,
   shortBreak: 5,
   longBreak: 15,
+  longBreakInterval: 4
 };
 
 const alarmSound = new Audio("/alarm.mp3"); // You'll need to add an alarm sound file to your public folder
@@ -41,7 +43,6 @@ export function Home() {
   const navigate = useNavigate();
   const { mode, setMode } = useTimer();
   const [settings, setSettings] = useState<TimerSettings>(() => {
-    // Don't set default settings here anymore
     return {} as TimerSettings;
   });
   const [isDevMode, setIsDevMode] = useState(() => {
@@ -63,39 +64,41 @@ export function Home() {
   const [isNearBottom, setIsNearBottom] = useState(true);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  // Load settings from Appwrite when user logs in
+  // Load settings from Appwrite
   useEffect(() => {
     async function loadSettings() {
-      if (!user?.current?.$id) {
-        console.log('No user ID yet, waiting...');
-        return;
-      }
+      if (!user?.current?.$id) return;
       
       try {
         const response = await databases.listDocuments(
-          import.meta.env.VITE_DATABASE_ID,
+          DATABASE_ID,
           'timer_settings',
-          [
-            Query.equal('userId', user.current.$id)
-          ]
+          [Query.equal('userId', user.current.$id)]
         );
 
         if (response.documents.length > 0) {
           const doc = response.documents[0];
           console.log('Found existing settings:', doc);
           const parsedSettings = JSON.parse(doc.settings);
-          setSettings(parsedSettings);
-          // Initialize timeLeft with loaded settings
-          setTimeLeft(parsedSettings[mode] * (isDevMode ? 1 : 60));
+          
+          // Merge with default settings to ensure all fields exist
+          const mergedSettings = {
+            ...DEFAULT_SETTINGS,
+            ...parsedSettings,
+          };
+          
+          console.log('Merged settings:', mergedSettings);
+          setSettings(mergedSettings);
+          setTimeLeft(mergedSettings[mode] * (isDevMode ? 1 : 60));
         } else {
-          console.log('No settings found, creating new document...');
+          console.log('Creating new settings with defaults:', DEFAULT_SETTINGS);
           const doc = await databases.createDocument(
-            import.meta.env.VITE_DATABASE_ID,
+            DATABASE_ID,
             'timer_settings',
             ID.unique(),
-            { 
+            {
               userId: user.current.$id,
-              settings: JSON.stringify(DEFAULT_SETTINGS) 
+              settings: JSON.stringify(DEFAULT_SETTINGS)
             },
             [
               Permission.read(Role.user(user.current.$id)),
@@ -103,18 +106,54 @@ export function Home() {
               Permission.delete(Role.user(user.current.$id))
             ]
           );
-          console.log('Created new settings document:', doc);
           setSettings(DEFAULT_SETTINGS);
-          // Initialize timeLeft with default settings
           setTimeLeft(DEFAULT_SETTINGS[mode] * (isDevMode ? 1 : 60));
         }
       } catch (error) {
-        console.error('Error managing settings:', error);
+        console.error('Error loading settings:', error);
       }
     }
 
     loadSettings();
   }, [user.current, mode, isDevMode]);
+
+  // Save settings to Appwrite when they change
+  useEffect(() => {
+    async function saveSettings() {
+      if (!user?.current?.$id) return;
+
+      try {
+        const response = await databases.listDocuments(
+          DATABASE_ID,
+          'timer_settings',
+          [Query.equal('userId', user.current.$id)]
+        );
+
+        if (response.documents.length > 0) {
+          const doc = response.documents[0];
+          const currentSettings = {
+            ...settings,
+            completedPomodoros,
+            currentMode: mode
+          };
+          
+          console.log('Saving settings:', currentSettings);
+          await databases.updateDocument(
+            DATABASE_ID,
+            'timer_settings',
+            doc.$id,
+            {
+              settings: JSON.stringify(currentSettings)
+            }
+          );
+        }
+      } catch (error) {
+        console.error('Error saving settings:', error);
+      }
+    }
+
+    saveSettings();
+  }, [settings, completedPomodoros, mode, user.current]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -254,25 +293,36 @@ export function Home() {
     }
   }, [navigate, settings, isDevMode, setMode]);
 
-  // Also navigate when timer completes
+  // Add console logs to debug
   useEffect(() => {
     if (timeLeft === 0 && !isRunning) {
       let nextMode: TimerMode;
       if (mode === 'work') {
-        nextMode = completedPomodoros % 4 === 3 ? 'longBreak' : 'shortBreak';
-        setTimeout(() => navigate('/chat'), 0);
+        const newCompletedPomodoros = completedPomodoros + 1;
+        console.log('Completed pomodoros:', newCompletedPomodoros);
+        console.log('Long break interval:', settings.longBreakInterval);
+        console.log('Is long break?', newCompletedPomodoros % settings.longBreakInterval === 0);
+        
+        setCompletedPomodoros(newCompletedPomodoros);
+        
+        // Use settings.longBreakInterval instead of the state variable
+        if (newCompletedPomodoros % settings.longBreakInterval === 0) {
+          console.log('Starting long break');
+          nextMode = 'longBreak';
+        } else {
+          console.log('Starting short break');
+          nextMode = 'shortBreak';
+        }
+        
+        setShowCompletionDialog(true);
       } else {
         nextMode = 'work';
       }
       
+      console.log('Next mode:', nextMode);
       handleModeChange(nextMode);
-      
-      if (mode === 'work') {
-        setCompletedPomodoros(prev => prev + 1);
-        setShowCompletionDialog(true);
-      }
     }
-  }, [timeLeft, isRunning, mode, completedPomodoros, navigate, handleModeChange]);
+  }, [timeLeft, isRunning, mode, completedPomodoros, settings.longBreakInterval]);
 
   // Chat functions
   const scrollToBottom = useCallback(() => {
