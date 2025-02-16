@@ -8,10 +8,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { databases, DATABASE_ID, account } from "../lib/appwrite";
 import { ID, Permission, Role, Query } from "appwrite";
 import { useTimer } from "@/lib/context/timer";
-import { useNavigate } from 'react-router-dom';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronDown } from "lucide-react";
 import { Client } from "appwrite";
+import { StickerPicker } from "@/components/StickerPicker";
 
 // Define interfaces
 type TimerMode = 'work' | 'shortBreak' | 'longBreak';
@@ -132,15 +132,19 @@ interface AppwriteMessage {
   userName: string;
   userAvatar?: string;
   createdAt: string;
+  type: 'text' | 'sticker';
 }
 
 // Create a custom hook for chat functionality
 function useChat(user: ReturnType<typeof useUser>, mode: TimerMode) {
   const [messages, setMessages] = useState<AppwriteMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  const [cursorPosition, setCursorPosition] = useState(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isNearBottom, setIsNearBottom] = useState(true);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [currentSticker, setCurrentSticker] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = useCallback(() => {
     if (scrollAreaRef.current) {
@@ -178,29 +182,54 @@ function useChat(user: ReturnType<typeof useUser>, mode: TimerMode) {
     }
   }, []);
 
+  const insertSticker = useCallback((sticker: string) => {
+    const stickerText = `[sticker:${sticker}]`;
+    const before = newMessage.slice(0, cursorPosition);
+    const after = newMessage.slice(cursorPosition);
+    const updatedMessage = before + stickerText + after;
+    setNewMessage(updatedMessage);
+    
+    // Update cursor position after sticker
+    const newPosition = cursorPosition + stickerText.length;
+    setCursorPosition(newPosition);
+    
+    // Focus input and set cursor position
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.setSelectionRange(newPosition, newPosition);
+      }
+    }, 0);
+  }, [newMessage, cursorPosition]);
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewMessage(e.target.value);
+    setCursorPosition(e.target.selectionStart || 0);
+  }, []);
+
   const sendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !user.current) return;
 
     try {
+      // Check if message contains stickers and format content accordingly
+      const content = newMessage.trim();
+      const hasStickers = content.includes('[sticker:');
+      
       await databases.createDocument(
         DATABASE_ID,
         'messages',
         ID.unique(),
         {
-          content: newMessage.trim(),
+          content,
           userId: user.current.$id,
           userName: user.current.name,
           userAvatar: user.current.prefs.avatarUrl,
           createdAt: new Date().toISOString(),
-        },
-        [
-          Permission.read(Role.any()),
-          Permission.update(Role.user(user.current.$id)),
-          Permission.delete(Role.user(user.current.$id)),
-        ]
+        }
       );
       setNewMessage("");
+      setCursorPosition(0);
     } catch (error) {
       console.error('Error sending message:', error);
     }
@@ -243,13 +272,19 @@ function useChat(user: ReturnType<typeof useUser>, mode: TimerMode) {
     messages,
     newMessage,
     setNewMessage,
+    cursorPosition,
+    setCursorPosition,
     showScrollButton,
     isNearBottom,
     scrollAreaRef,
     scrollToBottom,
     handleScroll,
     sendMessage,
-    setShowScrollButton
+    setShowScrollButton,
+    setCurrentSticker,
+    insertSticker,
+    handleInputChange,
+    inputRef
   };
 }
 
@@ -329,6 +364,32 @@ function useSettings(user: ReturnType<typeof useUser>) {
     saveSettings
   };
 }
+
+const MessageContent = ({ content, isOwnMessage }: { content: string, isOwnMessage: boolean }) => {
+  const parts = content.split(/(\[sticker:[^\]]+\])/);
+  
+  return (
+    <div className={`text-sm mt-1 p-3 rounded-lg ${
+      isOwnMessage ? 'bg-blue-500 text-white' : 'bg-gray-100'
+    }`}>
+      {parts.map((part, index) => {
+        const stickerMatch = part.match(/\[sticker:([^\]]+)\]/);
+        if (stickerMatch) {
+          const stickerName = stickerMatch[1];
+          return (
+            <img 
+              key={index}
+              src={`/learnwithleon/${stickerName}`}
+              alt="Sticker"
+              className="inline-block h-8 w-8 align-middle mx-1"
+            />
+          );
+        }
+        return <span key={index}>{part}</span>;
+      })}
+    </div>
+  );
+};
 
 export function Home() {
   const user = useUser();
@@ -563,13 +624,10 @@ export function Home() {
                           {formatTime(new Date(message.createdAt).getTime() / 1000, true)}
                         </span>
                       </div>
-                      <p className={`text-sm mt-1 p-3 rounded-lg ${
-                        message.userId === user.current?.$id
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-gray-100'
-                      }`}>
-                        {message.content}
-                      </p>
+                      <MessageContent 
+                        content={message.content} 
+                        isOwnMessage={message.userId === user.current?.$id}
+                      />
                     </div>
                   </div>
                 ))}
@@ -590,11 +648,17 @@ export function Home() {
               </Button>
             )}
 
-            <form onSubmit={chat.sendMessage} className="flex gap-4">
+            <form onSubmit={chat.sendMessage} className="flex items-center gap-2">
+              <StickerPicker 
+                unlockedStickers={[...new Set(JSON.parse(user.current?.prefs.unlockedStickers || '[]') as string[])]}
+                onStickerSelect={chat.insertSticker}
+              />
               <Input 
-                placeholder="Type your message..." 
+                ref={chat.inputRef}
+                placeholder="Type your message... Use stickers with the picker!" 
                 value={chat.newMessage}
-                onChange={(e) => chat.setNewMessage(e.target.value)}
+                onChange={chat.handleInputChange}
+                onSelect={(e) => chat.setCursorPosition(e.currentTarget.selectionStart)}
                 className="flex-1"
               />
               <Button type="submit">

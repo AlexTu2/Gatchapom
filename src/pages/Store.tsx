@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useUser } from "@/lib/context/user";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,15 @@ export function Store() {
   const microLeons = Number(user.current?.prefs.microLeons) || 0;
   const unlockedStickers = user.current?.prefs.unlockedStickers ? 
     JSON.parse(user.current.prefs.unlockedStickers) : [];
+
+  // Create a map to count sticker quantities
+  const stickerCounts = useMemo(() => {
+    const counts: { [key: string]: number } = {};
+    unlockedStickers.forEach((sticker: string) => {
+      counts[sticker] = (counts[sticker] || 0) + 1;
+    });
+    return counts;
+  }, [unlockedStickers]);
 
   const openBoosterPack = useCallback(async () => {
     if (!user.current || microLeons < BOOSTER_PACK_COST) return;
@@ -121,7 +130,9 @@ export function Store() {
               <h3 className="font-medium">Your Collection</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {STICKER_OPTIONS.map((sticker) => {
-                  const isUnlocked = unlockedStickers.includes(sticker);
+                  const count = stickerCounts[sticker] || 0;
+                  const isUnlocked = count > 0;
+                  
                   return (
                     <div 
                       key={sticker}
@@ -152,6 +163,11 @@ export function Store() {
                         {!isUnlocked && (
                           <div className="absolute inset-0 flex items-center justify-center bg-black/5 rounded-lg">
                             <Lock className="w-4 h-4 text-gray-400" />
+                          </div>
+                        )}
+                        {count > 1 && (
+                          <div className="absolute top-1 right-1 bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium">
+                            {count}
                           </div>
                         )}
                       </div>
