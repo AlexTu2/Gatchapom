@@ -1,26 +1,9 @@
 import { ID } from "appwrite";
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { account, BUCKET_ID, storage } from "../appwrite";
+import type { UserPrefs, UserContextType } from '../types/user';
 
-interface UserPrefs {
-  avatarId: string | null;
-  avatarUrl: string | null;
-}
-
-interface UserContextType {
-  current: {
-    $id: string;
-    email: string;
-    name: string;
-    prefs: UserPrefs;
-  } | null;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
-  updateAvatar: (avatarId: string | null) => Promise<void>;
-}
-
-const UserContext = createContext<UserContextType | null>(null);
+const UserContext = createContext<UserContextType>({ current: null, login: async () => {}, logout: async () => {}, register: async () => {}, updateAvatar: async () => {} });
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserContextType['current']>(null);
@@ -28,22 +11,26 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     account.get()
       .then(response => {
-        const defaultPrefs: UserPrefs = {
-          avatarId: null,
-          avatarUrl: null
-        };
-        
         if (!response.prefs) {
-          account.updatePrefs(defaultPrefs)
+          account.updatePrefs({
+            avatarId: undefined,
+            avatarUrl: undefined
+          })
             .then(() => {
-              setUser({ ...response, prefs: defaultPrefs });
+              setUser({ ...response, prefs: {
+                avatarId: undefined,
+                avatarUrl: undefined
+              }});
             })
             .catch(error => {
               console.error('Failed to update preferences:', error);
               setUser(null);
             });
         } else {
-          setUser({ ...response, prefs: response.prefs as UserPrefs });
+          setUser({ ...response, prefs: {
+            avatarId: response.prefs.avatarId ?? undefined,
+            avatarUrl: response.prefs.avatarUrl ?? undefined
+          }});
         }
       })
       .catch(error => {
@@ -52,7 +39,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       });
   }, []);
 
-  async function updateAvatar(avatarId: string | null) {
+  async function updateAvatar(fileId: string) {
     if (!user) {
       throw new Error('No user logged in');
     }
@@ -60,13 +47,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
     try {
       const updatedPrefs = await account.updatePrefs({
         ...user.prefs,
-        avatarId,
-        avatarUrl: avatarId ? storage.getFileView(BUCKET_ID, avatarId) : null
+        avatarId: fileId,
+        avatarUrl: fileId ? storage.getFileView(BUCKET_ID, fileId).toString() : undefined
       });
-      
       const typedPrefs = updatedPrefs as unknown as UserPrefs;
       setUser({ ...user, prefs: typedPrefs });
-      return typedPrefs;
+      return {
+        avatarId: typedPrefs.avatarId,
+        avatarUrl: typedPrefs.avatarUrl
+      };
     } catch (error) {
       console.error('Update avatar error:', error);
       throw error;
@@ -79,8 +68,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
       const loggedInUser = await account.get();
       if (!loggedInUser.prefs) {
         const updatedUser = await account.updatePrefs({
-          avatarId: null,
-          avatarUrl: null
+          avatarId: undefined,
+          avatarUrl: undefined
         });
         const typedPrefs = updatedUser as unknown as UserPrefs;
         setUser({ ...loggedInUser, prefs: typedPrefs });
@@ -100,8 +89,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
       await account.createEmailPasswordSession(email, password);
       const loggedInUser = await account.get();
       const updatedUser = await account.updatePrefs({
-        avatarId: null,
-        avatarUrl: null
+        avatarId: undefined,
+        avatarUrl: undefined
       });
       const typedPrefs = updatedUser as unknown as UserPrefs;
       setUser({ ...loggedInUser, prefs: typedPrefs });
@@ -129,8 +118,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
       login, 
       logout,
       register,
-      updateAvatar: async (avatarId: string | null) => {
-        await updateAvatar(avatarId);
+      updateAvatar: async (fileId: string) => {
+        await updateAvatar(fileId);
         return;
       }
     }}>

@@ -9,6 +9,7 @@ import { useForm } from "react-hook-form";
 import { account, storage, BUCKET_ID } from "../lib/appwrite";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ID } from "appwrite";
+import { UserPrefs } from "@/lib/types/user";
 
 const usernameSchema = z.object({
   username: z.string()
@@ -84,6 +85,7 @@ export function Profile() {
       const updated = await account.get();
       user.current = {
         $id: updated.$id,
+        $createdAt: updated.$createdAt,
         email: updated.email,
         name: updated.name,
         prefs: {
@@ -115,6 +117,7 @@ export function Profile() {
       const updated = await account.get();
       user.current = {
         $id: updated.$id,
+        $createdAt: updated.$createdAt,
         email: updated.email,
         name: updated.name,
         prefs: {
@@ -189,7 +192,8 @@ export function Profile() {
       );
 
       // Update user preferences with new avatar
-      const updatedPrefs = await user.updateAvatar(response.$id);
+      await user.updateAvatar(response.$id);
+      const updatedPrefs = user.current?.prefs as UserPrefs;
       
       // Force a new URL object with cache-busting
       const avatarUrl = updatedPrefs?.avatarUrl; // Use avatarUrl from prefs
@@ -275,7 +279,7 @@ export function Profile() {
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-500">Account Created</label>
-                <p className="mt-1">{new Date(user.current?.$createdAt).toLocaleDateString()}</p>
+                <p className="mt-1">{user.current?.$createdAt ? new Date(user.current.$createdAt).toLocaleDateString() : ''}</p>
               </div>
             </div>
           </CardContent>
