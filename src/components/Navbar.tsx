@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useEffect, useState } from "react";
-import { Coins } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export function Navbar() {
   const user = useUser();
@@ -41,13 +41,20 @@ export function Navbar() {
     <nav className="border-b bg-white">
       <div className="flex justify-between items-center p-4 container mx-auto">
         <div className="flex items-center gap-4">
-          <Button 
-            variant="ghost" 
-            className="text-xl font-bold"
-            onClick={() => window.location.href = '/'}
+          <Link to="/">
+            <Button 
+              variant="ghost" 
+              className="text-xl font-bold"
+            >
+              Pomodoro Timer
+            </Button>
+          </Link>
+          <Link 
+            to="/store" 
+            className="text-sm font-medium text-gray-500 hover:text-gray-900"
           >
-            Pomodoro Timer
-          </Button>
+            Store
+          </Link>
         </div>
         
         {user.current && (
@@ -78,8 +85,8 @@ export function Navbar() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => window.location.href = '/profile'}>
-                  Profile
+                <DropdownMenuItem asChild>
+                  <Link to="/profile">Profile</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => user.logout()}>
                   Logout

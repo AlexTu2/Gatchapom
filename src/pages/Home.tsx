@@ -508,7 +508,7 @@ export function Home() {
                     variant="default"
                     size="lg"
                   >
-                    {isActive ? 'Pause' : 'Start'}
+                    {isRunning ? 'Pause' : 'Start'}
                   </Button>
                   <Button
                     onClick={resetTimer}

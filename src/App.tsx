@@ -7,20 +7,27 @@ import { Navbar } from "@/components/Navbar";
 import { useEffect } from "react";
 import { useUser } from "./lib/context/user";
 import { BrowserRouter } from "react-router-dom";
+import { Store } from "./pages/Store";
 
 function AppRoutes() {
   const user = useUser();
-  const isLoginPage = window.location.pathname === "/login";
-  const isProfilePage = window.location.pathname === "/profile";
+  const path = window.location.pathname;
 
-  if (!user.current && !isLoginPage) {
+  if (!user.current && path !== "/login") {
     window.location.replace("/login");
     return null;
   }
 
-  return isLoginPage ? <Login /> : 
-         isProfilePage ? <Profile /> :
-         <Home />;
+  switch (path) {
+    case "/login":
+      return <Login />;
+    case "/profile":
+      return <Profile />;
+    case "/store":
+      return <Store />;
+    default:
+      return <Home />;
+  }
 }
 
 function AppContent() {

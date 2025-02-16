@@ -1,7 +1,7 @@
 import { ID } from "appwrite";
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { account, BUCKET_ID, storage } from "../appwrite";
-import type { UserPrefs, UserContextType } from '../types/user';
+import type { UserPrefs } from '../types/user';
 import { Models } from "appwrite";
 
 interface UserContextType {
