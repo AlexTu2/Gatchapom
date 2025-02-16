@@ -1,9 +1,19 @@
 import { ID } from "appwrite";
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { account, client, BUCKET_ID, storage } from "../appwrite";
+import { account, BUCKET_ID, storage } from "../appwrite";
+
+interface UserPrefs {
+  avatarId: string | null;
+  avatarUrl: string | null;
+}
 
 interface UserContextType {
-  current: any;
+  current: {
+    $id: string;
+    email: string;
+    name: string;
+    prefs: UserPrefs;
+  } | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
@@ -13,26 +23,40 @@ interface UserContextType {
 const UserContext = createContext<UserContextType | null>(null);
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<UserContextType['current']>(null);
 
   useEffect(() => {
     account.get()
       .then(response => {
+        const defaultPrefs: UserPrefs = {
+          avatarId: null,
+          avatarUrl: null
+        };
+        
         if (!response.prefs) {
-          account.updatePrefs({
-            avatarId: null,
-            avatarUrl: null
-          }).then(updatedUser => {
-            setUser({ ...response, prefs: updatedUser });
-          });
+          account.updatePrefs(defaultPrefs)
+            .then(() => {
+              setUser({ ...response, prefs: defaultPrefs });
+            })
+            .catch(error => {
+              console.error('Failed to update preferences:', error);
+              setUser(null);
+            });
         } else {
-          setUser(response);
+          setUser({ ...response, prefs: response.prefs as UserPrefs });
         }
       })
-      .catch(() => setUser(null));
+      .catch(error => {
+        console.error('Failed to fetch user:', error);
+        setUser(null);
+      });
   }, []);
 
   async function updateAvatar(avatarId: string | null) {
+    if (!user) {
+      throw new Error('No user logged in');
+    }
+
     try {
       const updatedPrefs = await account.updatePrefs({
         ...user.prefs,
@@ -40,9 +64,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
         avatarUrl: avatarId ? storage.getFileView(BUCKET_ID, avatarId) : null
       });
       
-      const updatedUser = { ...user, prefs: updatedPrefs };
-      setUser(updatedUser);
-      return updatedPrefs;
+      const typedPrefs = updatedPrefs as unknown as UserPrefs;
+      setUser({ ...user, prefs: typedPrefs });
+      return typedPrefs;
     } catch (error) {
       console.error('Update avatar error:', error);
       throw error;
@@ -58,9 +82,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
           avatarId: null,
           avatarUrl: null
         });
-        setUser({ ...loggedInUser, prefs: updatedUser });
+        const typedPrefs = updatedUser as unknown as UserPrefs;
+        setUser({ ...loggedInUser, prefs: typedPrefs });
       } else {
-        setUser(loggedInUser);
+        setUser({ ...loggedInUser, prefs: loggedInUser.prefs as UserPrefs });
       }
       window.location.replace("/");
     } catch (error) {
@@ -78,7 +103,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
         avatarId: null,
         avatarUrl: null
       });
-      setUser({ ...loggedInUser, prefs: updatedUser });
+      const typedPrefs = updatedUser as unknown as UserPrefs;
+      setUser({ ...loggedInUser, prefs: typedPrefs });
       window.location.replace("/");
     } catch (error) {
       console.error('Registration error:', error);
@@ -101,9 +127,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
     <UserContext.Provider value={{ 
       current: user, 
       login, 
-      logout, 
-      register, 
-      updateAvatar 
+      logout,
+      register,
+      updateAvatar: async (avatarId: string | null) => {
+        await updateAvatar(avatarId);
+        return;
+      }
     }}>
       {children}
     </UserContext.Provider>

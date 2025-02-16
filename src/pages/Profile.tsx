@@ -6,7 +6,7 @@ import { Form } from "@/components/ui/form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { account, storage, BUCKET_ID, getAvatarUrl } from "../lib/appwrite";
+import { account, storage, BUCKET_ID } from "../lib/appwrite";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ID } from "appwrite";
 
@@ -82,12 +82,25 @@ export function Profile() {
       
       // Update the user context
       const updated = await account.get();
-      user.current = updated;
+      user.current = {
+        $id: updated.$id,
+        email: updated.email,
+        name: updated.name,
+        prefs: {
+          ...updated.prefs,
+          avatarId: updated.prefs.avatarId,
+          avatarUrl: updated.prefs.avatarUrl
+        }
+      };
       
       setSuccess("Username updated successfully!");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Username update error:', err);
-      setError(err?.message || 'Failed to update username');
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to update username');
+      }
     }
   }
 
@@ -100,13 +113,26 @@ export function Profile() {
       
       // Update the user context
       const updated = await account.get();
-      user.current = updated;
+      user.current = {
+        $id: updated.$id,
+        email: updated.email,
+        name: updated.name,
+        prefs: {
+          ...updated.prefs,
+          avatarId: updated.prefs.avatarId,
+          avatarUrl: updated.prefs.avatarUrl
+        }
+      };
       
       setSuccess("Email updated successfully!");
       emailForm.reset({ email: values.email, password: "" });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Email update error:', err);
-      setError(err?.message || 'Failed to update email');
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to update email');
+      }
     }
   }
 
@@ -119,9 +145,13 @@ export function Profile() {
       
       setSuccess("Password updated successfully!");
       passwordForm.reset();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Password update error:', err);
-      setError(err?.message || 'Failed to update password');
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to update password');
+      }
     }
   }
 
@@ -162,17 +192,18 @@ export function Profile() {
       const updatedPrefs = await user.updateAvatar(response.$id);
       
       // Force a new URL object with cache-busting
-      if (updatedPrefs?.avatarUrl) {
-        const url = new URL(updatedPrefs.avatarUrl.toString());
+      const avatarUrl = updatedPrefs?.avatarUrl; // Use avatarUrl from prefs
+      if (avatarUrl) {
+        const url = new URL(avatarUrl.toString());
         url.searchParams.set('v', Date.now().toString());
         setAvatarUrl(url.toString());
       }
       
       setSuccess("Profile picture updated successfully!");
       event.target.value = '';
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Avatar upload error:', err);
-      setError(err?.message || 'Failed to upload profile picture');
+      setError(err instanceof Error ? err.message : 'Failed to upload profile picture');
       setAvatarUrl(null);
     } finally {
       setIsUploading(false);

@@ -2,7 +2,6 @@ import { Login } from "@/pages/Login";
 import { Home } from "@/pages/Home";  
 import { Profile } from "@/pages/Profile";
 import { UserProvider } from "./lib/context/user";
-import { IdeasProvider } from "./lib/context/ideas";
 import { Navbar } from "@/components/Navbar";
 import { useEffect } from "react";
 import { useUser } from "./lib/context/user";
@@ -14,7 +13,7 @@ function AppRoutes() {
 
   if (!user.current && !isLoginPage) {
     window.location.replace("/login");
-    return <></>;
+    return null;
   }
 
   return isLoginPage ? <Login /> : 
@@ -49,9 +48,7 @@ function AppContent() {
 function App() {
   return (
     <UserProvider>
-      <IdeasProvider>
-        <AppContent />
-      </IdeasProvider>
+      <AppContent />
     </UserProvider>
   );
 }
