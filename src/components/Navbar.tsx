@@ -31,12 +31,6 @@ export function Navbar() {
           >
             Pomodoro Timer
           </Button>
-          <Button
-            variant="ghost"
-            onClick={() => window.location.href = '/chat'}
-          >
-            Chat
-          </Button>
         </div>
         
         {user.current && (
