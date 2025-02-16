@@ -1,10 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useUser } from "@/lib/context/user";
 import { databases, DATABASE_ID, client, MESSAGES_COLLECTION_ID } from "@/lib/appwrite";
 import { ID, Models, Query, Permission, Role } from "appwrite";
+import { ChevronDown } from "lucide-react";
 
 interface Message extends Models.Document {
   content: string;
@@ -19,6 +21,38 @@ export function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [isNearBottom, setIsNearBottom] = useState(true);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    if (scrollAreaRef.current) {
+      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+      }
+    }
+  };
+
+  const handleScroll = () => {
+    if (scrollAreaRef.current) {
+      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollContainer) {
+        const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+        const isBottom = scrollHeight - scrollTop - clientHeight < 100;
+        setIsNearBottom(isBottom);
+      }
+    }
+  };
+
+  // Auto-scroll only if we're near the bottom
+  useEffect(() => {
+    if (isNearBottom) {
+      setTimeout(scrollToBottom, 100);
+    } else {
+      setShowScrollButton(true);
+    }
+  }, [messages]);
 
   useEffect(() => {
     // Load initial messages
@@ -92,56 +126,75 @@ export function Chat() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
-      <Card className="w-full max-w-4xl h-[80vh]">
+    <div className="container mx-auto">
+      <Card>
         <CardHeader>
           <CardTitle className="text-2xl font-bold">Chat Room</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col h-full">
-          {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto mb-4 space-y-4">
-            {messages.map((message) => (
-              <div 
-                key={message.$id}
-                className={`flex items-start gap-3 ${
-                  message.userId === user.current?.$id ? 'flex-row-reverse' : ''
-                }`}
-              >
-                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
-                  {message.userAvatar ? (
-                    <img 
-                      src={message.userAvatar} 
-                      alt={message.userName}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-sm font-medium">
-                      {message.userName.charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                </div>
-                <div className={`max-w-[70%] ${
-                  message.userId === user.current?.$id ? 'text-right' : ''
-                }`}>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold">{message.userName}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {formatTime(message.createdAt)}
-                    </span>
+        <CardContent className="relative">
+          <ScrollArea 
+            className="h-[500px] pr-4 mb-4"
+            ref={scrollAreaRef}
+            onScrollCapture={handleScroll}
+          >
+            <div className="space-y-4">
+              {messages.map((message) => (
+                <div 
+                  key={message.$id}
+                  className={`flex items-start gap-3 ${
+                    message.userId === user.current?.$id ? 'flex-row-reverse' : ''
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+                    {message.userAvatar ? (
+                      <img 
+                        src={message.userAvatar} 
+                        alt={message.userName}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-sm font-medium">
+                        {message.userName.charAt(0).toUpperCase()}
+                      </span>
+                    )}
                   </div>
-                  <p className={`text-sm mt-1 p-3 rounded-lg ${
-                    message.userId === user.current?.$id
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-100'
+                  <div className={`max-w-[70%] ${
+                    message.userId === user.current?.$id ? 'text-right' : ''
                   }`}>
-                    {message.content}
-                  </p>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{message.userName}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatTime(message.createdAt)}
+                      </span>
+                    </div>
+                    <p className={`text-sm mt-1 p-3 rounded-lg ${
+                      message.userId === user.current?.$id
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100'
+                    }`}>
+                      {message.content}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </ScrollArea>
 
-          {/* Input Area */}
+          {/* New Message Scroll Button */}
+          {showScrollButton && !isNearBottom && (
+            <Button
+              size="icon"
+              variant="secondary"
+              className="absolute bottom-16 right-8 rounded-full w-8 h-8 shadow-md"
+              onClick={() => {
+                scrollToBottom();
+                setShowScrollButton(false);
+              }}
+            >
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          )}
+
           <form onSubmit={sendMessage} className="flex gap-4">
             <Input 
               placeholder="Type your message..." 
