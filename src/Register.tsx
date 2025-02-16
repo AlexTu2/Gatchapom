@@ -9,7 +9,10 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 
 const formSchema = z.object({
-  name: z.string().min(2, { message: "Name must be at least 2 characters long" }),
+  username: z.string()
+    .min(3, { message: "Username must be at least 3 characters long" })
+    .max(30, { message: "Username must be less than 30 characters" })
+    .regex(/^[a-zA-Z0-9_-]+$/, { message: "Username can only contain letters, numbers, underscores and dashes" }),
   email: z.string().email(),
   password: z.string().min(8, { message: "Password must be at least 8 characters long" }),
   confirmPassword: z.string()
@@ -24,16 +27,16 @@ const Register: React.FC = () => {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: "",
+      username: "",
       email: "",
       password: "",
       confirmPassword: "",
     },
   });
 
-  async function register(name: string, email: string, password: string): Promise<void> {
+  async function register(username: string, email: string, password: string): Promise<void> {
     try {
-      await account.create(ID.unique(), email, password, name);
+      await account.create(ID.unique(), email, password, username);
       // Automatically log in after registration
       await account.createEmailPasswordSession(email, password);
       setRegisteredUser(await account.get());
@@ -44,7 +47,7 @@ const Register: React.FC = () => {
   }
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    await register(values.name, values.email, values.password);
+    await register(values.username, values.email, values.password);
   }
 
   return (
@@ -60,13 +63,13 @@ const Register: React.FC = () => {
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div>
               <Input
-                {...form.register("name")}
+                {...form.register("username")}
                 type="text"
-                placeholder="Full Name"
+                placeholder="Username"
                 className="appearance-none rounded-md relative block w-full px-3 py-2 border"
               />
-              {form.formState.errors.name && (
-                <p className="text-red-500 text-sm mt-1">{form.formState.errors.name.message}</p>
+              {form.formState.errors.username && (
+                <p className="text-red-500 text-sm mt-1">{form.formState.errors.username.message}</p>
               )}
             </div>
 
@@ -117,7 +120,7 @@ const Register: React.FC = () => {
 
             {registeredUser && (
               <div className="mt-4">
-                <p className="text-center text-green-500">Successfully registered as {registeredUser.name}</p>
+                <p className="text-center text-green-500">Successfully registered as {registeredUser.username}</p>
                 <Button
                   type="button"
                   onClick={async () => {

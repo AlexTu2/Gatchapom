@@ -1,20 +1,30 @@
 import { Login } from "./pages/Login";  
 import { Home } from "./pages/Home";  
+import { Profile } from "./pages/Profile";
 import { UserProvider } from "./lib/context/user";
 import { IdeasProvider } from "./lib/context/ideas";
-import { useUser } from "./lib/context/user";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Navbar } from "@/components/Navbar";
 import { useEffect } from "react";
+import { useUser } from "./lib/context/user";
 
-function App(): JSX.Element {
+function AppRoutes(): JSX.Element {
+  const user = useUser();
   const isLoginPage = window.location.pathname === "/login";
-  
+  const isProfilePage = window.location.pathname === "/profile";
+
+  if (!user.current && !isLoginPage) {
+    window.location.replace("/login");
+    return <></>;
+  }
+
+  return isLoginPage ? <Login /> : 
+         isProfilePage ? <Profile /> : 
+         <Home />;
+}
+
+function AppContent(): JSX.Element {
+  const user = useUser();
+
   // Request notification permission when app loads
   useEffect(() => {
     if ("Notification" in window) {
@@ -22,49 +32,27 @@ function App(): JSX.Element {
     }
   }, []);
 
+  if (!user.current && window.location.pathname !== "/login") {
+    return <Login />;
+  }
+
   return (
-    <div>
-    <UserProvider>
-      <IdeasProvider>
-        <Navbar />
-        <main>{isLoginPage ? <Login /> : <Home />}</main>
-      </IdeasProvider>
-    </UserProvider>
-  </div>
+    <div className="min-h-screen bg-gray-50">
+      {user.current && <Navbar />}
+      <main className="container mx-auto px-4 py-8">
+        <AppRoutes />
+      </main>
+    </div>
   );
 }
 
-function Navbar(): JSX.Element {
-  const user = useUser();
-
+function App(): JSX.Element {
   return (
-    <nav className="border-b">
-      <div className="container flex h-14 items-center px-4 max-w-7xl mx-auto">
-        <a href="/" className="font-semibold text-lg">
-          Gatchapom
-        </a>
-        <div className="ml-auto flex items-center gap-4">
-          {user.current ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative">
-                  <span>{user.current.email}</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => user.logout()}>
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <Button asChild variant="default">
-              <a href="/login">Login</a>
-            </Button>
-          )}
-        </div>
-      </div>
-    </nav>
+    <UserProvider>
+      <IdeasProvider>
+        <AppContent />
+      </IdeasProvider>
+    </UserProvider>
   );
 }
 

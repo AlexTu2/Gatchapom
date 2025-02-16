@@ -1,9 +1,10 @@
-import { Client, Account, ID, Databases } from 'appwrite';
+import { Client, Account, ID, Databases, Storage } from 'appwrite';
 
 // Ensure environment variable exists at compile time
 declare global {
     interface ImportMetaEnv {
         VITE_APPWRITE_PROJECT_ID: string;
+        VITE_BUCKET_ID: string;
     }
 }
 
@@ -13,5 +14,23 @@ export const client = new Client()
 
 export const account = new Account(client);
 export const databases = new Databases(client);
+export const storage = new Storage(client);
 export { ID };
+
+// Constants
+export const BUCKET_ID = import.meta.env.VITE_BUCKET_ID;
+
+// Helper function to get avatar URL
+export function getAvatarUrl(fileId: string) {
+    if (!fileId) return null;
+    
+    try {
+        const url = storage.getFileView(BUCKET_ID, fileId);
+        console.log('Generated avatar URL:', url);
+        return url;
+    } catch (error) {
+        console.error('Error generating avatar URL:', error);
+        return null;
+    }
+}
 
