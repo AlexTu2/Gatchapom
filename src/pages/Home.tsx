@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronDown } from "lucide-react";
 import { Client } from "appwrite";
+import { Coins } from "lucide-react";
 
 interface Message {
   $id: string;
@@ -671,8 +672,16 @@ export function Home() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Pomodoro Complete!</DialogTitle>
-            <DialogDescription>
-              Great job! You've completed a work session. Take a break and come back refreshed.
+            <DialogDescription className="space-y-2">
+              <p>Great job! You've completed a work session.</p>
+              <p className="font-medium text-yellow-600 flex items-center gap-2">
+                <img 
+                  src="/learnwithleon/microLeon.png" 
+                  alt="Micro Leon" 
+                  className="h-16 w-16"
+                />
+                You earned {completedPomodoros % settings.longBreakInterval === 0 ? '50' : '10'} micro leons!
+              </p>
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end">

@@ -53,7 +53,11 @@ export function Navbar() {
         {user.current && (
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 text-yellow-600">
-              <Coins className="h-4 w-4" />
+              <img 
+                src="/learnwithleon/microLeon.png" 
+                alt="Micro Leon" 
+                className="h-6 w-6"
+              />
               <span className="font-medium">{microLeons}</span>
             </div>
             <span className="text-sm font-medium">{user.current.name}</span>
