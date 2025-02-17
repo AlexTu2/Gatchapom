@@ -86,7 +86,7 @@ export function Profile() {
       
       await account.updateName(values.username);
       const updatedUser = await account.get();
-      user.updateUser(updatedUser);
+      user.updateUser(updatedUser.prefs);
       
       setUsernameSuccess("Username updated successfully!");
     } catch (error) {
@@ -102,7 +102,7 @@ export function Profile() {
       
       await account.updateEmail(values.email, values.password);
       const updated = await account.get();
-      user.updateUser(updated);
+      user.updateUser(updated.prefs);
       
       setEmailSuccess("Email updated successfully!");
       emailForm.reset({ email: values.email, password: "" });

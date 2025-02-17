@@ -1,5 +1,5 @@
 import { createContext, useContext, ReactNode, useState, useEffect } from "react";
-import { useUser } from "./user";
+import { account } from '../appwrite';
 
 export type TimerMode = 'work' | 'shortBreak' | 'longBreak';
 
@@ -33,18 +33,13 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<TimerMode>('work');
   const [settings, setSettings] = useState<TimerSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
-  const user = useUser();
 
   // Load timer settings from user preferences
   useEffect(() => {
     async function loadSettings() {
-      if (!user?.current) {
-        setIsLoading(false);
-        return;
-      }
-
       try {
-        const prefs = user.current.prefs;
+        const user = await account.get();
+        const prefs = user.prefs;
         let savedSettings: TimerSettings | null = null;
 
         if (typeof prefs.timerSettings === 'string') {
@@ -61,7 +56,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         } else {
           // Reset to defaults if settings are invalid
           const defaultSettings = { ...DEFAULT_SETTINGS };
-          await user.updateUser({
+          await account.updatePrefs({
             timerSettings: JSON.stringify(defaultSettings)
           });
           setSettings(defaultSettings);
@@ -75,22 +70,20 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     }
 
     loadSettings();
-  }, [user?.current]);
+  }, []);
 
-  // Save settings to user preferences
+  // Update settings to user preferences
   const updateSettings = async (newSettings: TimerSettings) => {
-    if (!user?.current) return;
-
     try {
-      // Only update the timerSettings field
-      await user.updateUser({
+      // Get current user to preserve all preferences
+      const currentUser = await account.get();
+      await account.updatePrefs({
+        ...currentUser.prefs,  // Preserve all existing preferences
         timerSettings: JSON.stringify(newSettings)
       });
-      
       setSettings(newSettings);
-      setMode(newSettings.currentMode);
     } catch (error) {
-      console.error('Error saving timer settings:', error);
+      console.error('Error updating timer settings:', error);
       throw error;
     }
   };
@@ -98,9 +91,11 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   // Update mode and save to settings
   const handleModeChange = async (newMode: TimerMode) => {
     try {
-      // Only update the timerSettings field
       const newSettings = { ...settings, currentMode: newMode };
-      await user.updateUser({
+      // Get current user to preserve all preferences
+      const currentUser = await account.get();
+      await account.updatePrefs({
+        ...currentUser.prefs,  // Preserve all existing preferences
         timerSettings: JSON.stringify(newSettings)
       });
       

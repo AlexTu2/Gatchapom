@@ -28,15 +28,6 @@ interface TimerSettings {
   currentMode: TimerMode;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const DEFAULT_SETTINGS: TimerSettings = {
-  work: 25,
-  shortBreak: 5,
-  longBreak: 15,
-  longBreakInterval: 4,
-  currentMode: 'work'
-};
-
 // Create a custom hook for timer logic
 function useTimerLogic(settings: TimerSettings, isDevMode: boolean, mode: TimerMode) {
   const { volume } = useAudio();
@@ -203,18 +194,26 @@ function useModeTransition() {
       const currentLeons = Number(currentUser.prefs.microLeons) || 0;
       const newLeons = currentLeons + amount;
       
-      // Update only the microLeons field
-      await user.updateUser({
+      // Preserve all existing preferences while updating microLeons
+      const updatedPrefs = {
+        ...currentUser.prefs,  // Keep all existing preferences
         microLeons: newLeons.toString()
-      });
+      };
+
+      // Update preferences with merged object
+      await account.updatePrefs(updatedPrefs);
 
       // Verify the update
       const verifyUser = await account.get();
       console.log('MicroLeons update:', {
         before: currentLeons,
         awarded: amount,
-        after: Number(verifyUser.prefs.microLeons)
+        after: Number(verifyUser.prefs.microLeons),
+        currentPrefs: verifyUser.prefs
       });
+
+      // Update the user context with the new prefs
+      user.updateUser(verifyUser.prefs);
 
     } catch (error) {
       console.error('Error awarding micro leons:', error);

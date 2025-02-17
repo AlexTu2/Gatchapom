@@ -68,7 +68,8 @@ export function useStickers() {
   const getStickerUrl = (nameOrId: string) => {
     try {
       const fileId = nameToId[nameOrId] || nameOrId;
-      return storage.getFileView(STICKERS_BUCKET_ID, fileId);
+      const url = storage.getFileView(STICKERS_BUCKET_ID, fileId);
+      return url.toString();  // Convert URL to string
     } catch (error) {
       console.error('Failed to get sticker URL:', error);
       return '/fallback-sticker.png';

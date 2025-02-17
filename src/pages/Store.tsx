@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { useUser } from "@/lib/context/user";
+import { useUser } from "../lib/context/user";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -12,6 +12,7 @@ import { Models } from "appwrite";
 import { AUDIO_BUCKET_ID } from "@/lib/audio";
 import { STICKER_SOUND_MAP } from "@/config/stickerSounds";
 import { useAudio } from "@/lib/context/audio";
+import { account } from '../lib/appwrite';
 
 const BOOSTER_PACK_COST = 100;
 const MAX_PACKS = 10;
@@ -152,8 +153,19 @@ export function Store() {
 
       // Update user preferences with retry
       await retryOperation(async () => {
+        // Get current user to ensure we have latest prefs
+        const currentUser = await account.get();
         const updatedMicroLeons = microLeons - totalCost;
-        await user.updateUser({
+        
+        // Merge with existing preferences
+        await account.updatePrefs({
+          ...currentUser.prefs,
+          microLeons: updatedMicroLeons.toString(),
+          unlockedStickers: JSON.stringify(updatedStickers)
+        });
+
+        // Update local user state
+        user.updateUser({
           microLeons: updatedMicroLeons.toString(),
           unlockedStickers: JSON.stringify(updatedStickers)
         });
@@ -195,10 +207,6 @@ export function Store() {
   // Handle dialog close
   const handleRewardClose = () => {
     setShowReward(false);
-    // Start the fade out after dialog is closed
-    setTimeout(() => {
-      setJustUnlocked(null);
-    }, 1000); // Shorter duration since user has already seen it
   };
 
   if (isLoading) {

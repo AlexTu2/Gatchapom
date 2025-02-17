@@ -1,5 +1,6 @@
 import { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react';
 import { useUser } from './user';
+import { account } from '../appwrite';
 
 interface AudioContextType {
   volume: number;
@@ -32,24 +33,17 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const commitVolume = useCallback(async (newVolume: number) => {
-    // Only try to update user prefs if we have a logged-in user
-    if (!user.current) {
-      setVolumeState(newVolume);
-      localStorage.setItem('volume', newVolume.toString());
-      return;
-    }
+    if (!user.current) return;
     
     try {
-      await user.updateUser({
+      const currentUser = await account.get();
+      await account.updatePrefs({
+        ...currentUser.prefs,
         volume: newVolume.toString()
       });
     } catch (error) {
       console.error('Failed to update volume:', error);
-      // On error, revert to the volume from user prefs or localStorage
-      const savedVolume = user.current?.prefs?.volume || localStorage.getItem('volume');
-      if (savedVolume) {
-        setVolumeState(Number(savedVolume));
-      }
+      throw error;
     }
   }, [user]);
 

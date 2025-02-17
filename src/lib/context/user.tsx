@@ -15,6 +15,14 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
+const DEFAULT_SETTINGS = {
+  work: 25,
+  shortBreak: 5,
+  longBreak: 15,
+  longBreakInterval: 4,
+  currentMode: 'work'
+};
+
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Models.User<Models.Preferences> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -137,7 +145,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       await account.updatePrefs(updatedPrefs);
       const freshUser = await account.get();
-      setUser(freshUser);
       
       return {
         avatarId: freshUser.prefs.avatarId,
@@ -205,15 +212,23 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const updateUser = async (updates: Partial<Models.Preferences>) => {
     try {
-      if (!user) throw new Error('No user logged in');
-
       // Get fresh user data first
       const currentUser = await account.get();
       
-      // Merge existing preferences with updates
+      // Ensure all required fields exist with defaults if not present
+      const basePrefs = {
+        ...currentUser.prefs,  // Spread existing prefs FIRST
+        // Then ensure these required fields exist with defaults if missing
+        microLeons: currentUser.prefs.microLeons || "0",
+        unlockedStickers: currentUser.prefs.unlockedStickers || "[]",
+        timerSettings: currentUser.prefs.timerSettings || JSON.stringify(DEFAULT_SETTINGS),
+        volume: currentUser.prefs.volume || "0.5"
+      };
+
+      // Merge with updates
       const mergedPrefs = {
-        ...currentUser.prefs, // Keep all existing preferences
-        ...updates // Apply our updates
+        ...basePrefs,
+        ...updates
       };
 
       // Update preferences with merged object
@@ -224,7 +239,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
       console.log('User preferences updated:', {
         before: currentUser.prefs,
         updates,
-        after: freshUser.prefs
+        after: freshUser.prefs,
+        merged: mergedPrefs
       });
 
       setUser(freshUser);

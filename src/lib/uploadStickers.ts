@@ -50,9 +50,9 @@ export async function uploadStickers() {
         ID.unique(),
         file,
         [
-          Permission.read(Role.any()), // Anyone can view the sticker
-          Permission.update(Role.users()), // Only users can update
-          Permission.delete(Role.users()) // Only users can delete
+          Permission.read(Role.any()),
+          Permission.write(Role.users()),
+          Permission.delete(Role.users())
         ]
       );
       
