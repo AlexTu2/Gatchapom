@@ -29,7 +29,7 @@ export const PRESET_PLAYLISTS = [
   {
     id: 'mixed',
     name: '100Devs Collection',
-    description: 'Our very own @chrispnuggetr',
+    description: 'Our very own @ChrisPNugget',
     type: 'mixed',
     content: MIXED_COLLECTION
   },
