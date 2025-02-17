@@ -23,9 +23,21 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
 
   useEffect(() => {
+    let isMounted = true;
+
     // Check if user is logged in
-    account.get()
-      .then(async (response) => {
+    const checkUser = async () => {
+      // Don't check user on login or register pages
+      if (window.location.pathname === '/login' || window.location.pathname === '/register') {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const response = await account.get();
+        
+        if (!isMounted) return;
+
         // For completely new users with no prefs
         if (!response.prefs) {
           const defaultTimerSettings = {
@@ -45,7 +57,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
           await account.updatePrefs(initialPrefs);
           const updatedUser = await account.get();
-          setUser(updatedUser);
+          if (isMounted) setUser(updatedUser);
         } else {
           // For existing users, ensure timerSettings exists
           const currentPrefs = response.prefs;
@@ -54,12 +66,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
           // Initialize missing preferences
           if (!currentPrefs.microLeons) {
-            updatedPrefs.microLeons = currentPrefs.microLeons || "0";
+            updatedPrefs.microLeons = "0";
             needsUpdate = true;
           }
 
           if (!currentPrefs.unlockedStickers) {
-            updatedPrefs.unlockedStickers = currentPrefs.unlockedStickers || "[]";
+            updatedPrefs.unlockedStickers = "[]";
             needsUpdate = true;
           }
 
@@ -67,20 +79,40 @@ export function UserProvider({ children }: { children: ReactNode }) {
           if (needsUpdate) {
             await account.updatePrefs(updatedPrefs);
             const updatedUser = await account.get();
-            setUser(updatedUser);
+            if (isMounted) setUser(updatedUser);
           } else {
-            setUser(response);
+            if (isMounted) setUser(response);
           }
         }
-      })
-      .catch((error) => {
-        console.error('Error getting user:', error);
-        setUser(null);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }, []);
+      } catch (error: any) {
+        // Handle unauthorized or missing scope errors silently
+        if (error?.code === 401 || 
+            error?.message?.includes('missing scope (account)') ||
+            error?.message?.includes('Unauthorized')) {
+          if (isMounted) {
+            setUser(null);
+            // Only navigate if we're not already on the login or register page
+            const currentPath = window.location.pathname;
+            if (currentPath !== '/login' && currentPath !== '/register') {
+              navigate('/login');
+            }
+          }
+        } else {
+          // Log other types of errors
+          console.error('Error getting user:', error);
+          if (isMounted) setUser(null);
+        }
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    checkUser();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [navigate]);
 
   async function updateAvatar(fileId: string) {
     if (!user) {
