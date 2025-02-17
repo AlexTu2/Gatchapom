@@ -448,13 +448,10 @@ export function Home() {
   const chat = useChat(user, mode);
 
   // Find microLeon sticker ID
-  const microLeonSticker = useMemo(() => 
-    stickers.find(s => 
-      s.name === 'microLeon.png' || 
-      s.$id === '67b27bbc001cba8f5ed9'
-    ),
-    [stickers]
-  );
+  const microLeonSticker = useMemo(() => ({
+    $id: '67b27bbc001cba8f5ed9',
+    name: 'microLeon.png'
+  }), []); // Simplified since we know the ID
 
   // Handle timer completion
   useEffect(() => {

@@ -38,12 +38,13 @@ export function useStickers() {
           nameToId[fullName.toLowerCase()] = file.$id;
           nameToId[baseName.toLowerCase()] = file.$id;
           
-          // Special case for microLeon
+          // Special case for microLeon - handle both the file name and ID
           if (file.name === 'microLeon.png' || file.$id === '67b27bbc001cba8f5ed9') {
-            nameToId['microLeon'] = file.$id;
-            nameToId['microLeon.png'] = file.$id;
-            nameToId['microleon'] = file.$id;
-            nameToId['microleon.png'] = file.$id;
+            nameToId['microLeon'] = '67b27bbc001cba8f5ed9';
+            nameToId['microLeon.png'] = '67b27bbc001cba8f5ed9';
+            nameToId['microleon'] = '67b27bbc001cba8f5ed9';
+            nameToId['microleon.png'] = '67b27bbc001cba8f5ed9';
+            idToName['67b27bbc001cba8f5ed9'] = 'microLeon';
           }
           
           // Store the base name for ID lookup

@@ -24,10 +24,10 @@ export function Store() {
 
   const { stickers, isLoading, getStickerUrl } = useStickers();
 
-  const microLeonSticker = useMemo(() => 
-    stickers.find(s => s.name === 'microLeon.png'),
-    [stickers]
-  );
+  const microLeonSticker = useMemo(() => ({
+    $id: '67b27bbc001cba8f5ed9',
+    name: 'microLeon.png'
+  }), []);
 
   // Create a map to count sticker quantities
   const stickerCounts = useMemo(() => {
@@ -215,11 +215,17 @@ export function Store() {
               <div className="space-y-2">
                 <div>You've unlocked a new sticker for your collection!</div>
                 <div className="font-medium text-yellow-600 flex items-center gap-2">
-                  <img 
-                    src="/learnwithleon/microLeon.png" 
-                    alt="Micro Leon" 
-                    className="h-16 w-16"
-                  />
+                  {microLeonSticker && (
+                    <img 
+                      src={getStickerUrl(microLeonSticker.$id)}
+                      alt="Micro Leon" 
+                      className="h-16 w-16"
+                      onError={(e) => {
+                        console.error('Failed to load microLeon sticker');
+                        e.currentTarget.src = '/fallback-sticker.png';
+                      }}
+                    />
+                  )}
                   You spent {BOOSTER_PACK_COST} micro leons!
                 </div>
               </div>
@@ -232,6 +238,10 @@ export function Store() {
                   src={getStickerUrl(currentSticker)}
                   alt="New Sticker"
                   className="w-full h-full object-contain"
+                  onError={(e) => {
+                    console.error('Failed to load new sticker');
+                    e.currentTarget.src = '/fallback-sticker.png';
+                  }}
                 />
               </div>
             </div>

@@ -38,13 +38,10 @@ export function Navbar() {
   console.log('Current avatarUrl state:', avatarUrl);
 
   // Find microLeon sticker
-  const microLeonSticker = useMemo(() => 
-    stickers.find(s => 
-      s.name === 'microLeon.png' || 
-      s.$id === '67b27bbc001cba8f5ed9'
-    ),
-    [stickers]
-  );
+  const microLeonSticker = useMemo(() => ({
+    $id: '67b27bbc001cba8f5ed9',
+    name: 'microLeon.png'
+  }), []); // Simplified since we know the ID
 
   const handleLogout = async () => {
     await user.logout();
