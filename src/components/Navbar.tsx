@@ -10,6 +10,7 @@ import { useEffect, useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useStickers } from '@/lib/hooks/useStickers';
 import { useAvatar } from '@/lib/context/avatar';
+import { VolumeControl } from './VolumeControl';
 
 export function Navbar() {
   const user = useUser();
@@ -61,6 +62,7 @@ export function Navbar() {
         
         {user.current && (
           <div className="flex items-center gap-3">
+            <VolumeControl />
             <div className="flex items-center gap-2 text-yellow-600">
               {microLeonSticker && (
                 <img 

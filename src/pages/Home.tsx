@@ -16,6 +16,7 @@ import { useStickers } from '@/lib/hooks/useStickers';
 import { cn } from "@/lib/utils";
 import { storage } from '@/lib/appwrite';
 import * as audio from '@/lib/audio';
+import { useAudio } from "@/lib/context/audio";
 
 // Define interfaces
 type TimerMode = 'work' | 'shortBreak' | 'longBreak';
@@ -36,6 +37,7 @@ const DEFAULT_SETTINGS: TimerSettings = {
 
 // Create a custom hook for timer logic
 function useTimerLogic(settings: TimerSettings, isDevMode: boolean, mode: TimerMode) {
+  const { volume } = useAudio();
   const [timeLeft, setTimeLeft] = useState(settings[mode] * (isDevMode ? 1 : 60));
   const [isActive, setIsActive] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -47,7 +49,7 @@ function useTimerLogic(settings: TimerSettings, isDevMode: boolean, mode: TimerM
   useEffect(() => {
     const loadAudio = async () => {
       if (alarmSound.current) {
-        // Audio already loaded
+        alarmSound.current.volume = volume;
         return;
       }
 
@@ -57,6 +59,7 @@ function useTimerLogic(settings: TimerSettings, isDevMode: boolean, mode: TimerM
         
         if (audioUrl) {
           const audioElement = new Audio(audioUrl.toString());
+          audioElement.volume = volume; // Set initial volume
           
           // Set up event listeners
           audioElement.addEventListener('canplaythrough', () => {
@@ -68,6 +71,7 @@ function useTimerLogic(settings: TimerSettings, isDevMode: boolean, mode: TimerM
             console.error('Audio loading error:', e);
             // Fallback to local file if Appwrite fails
             const localAudio = new Audio('/alarm.wav');
+            localAudio.volume = volume; // Set volume for fallback audio
             localAudio.addEventListener('canplaythrough', () => {
               console.log('Local audio loaded successfully');
               setIsAudioLoaded(true);
@@ -83,6 +87,7 @@ function useTimerLogic(settings: TimerSettings, isDevMode: boolean, mode: TimerM
         console.error('Failed to load audio:', error);
         // Fallback to local file
         const localAudio = new Audio('/alarm.wav');
+        localAudio.volume = volume; // Set volume for fallback audio
         localAudio.addEventListener('canplaythrough', () => {
           console.log('Local audio loaded successfully');
           setIsAudioLoaded(true);
@@ -101,7 +106,7 @@ function useTimerLogic(settings: TimerSettings, isDevMode: boolean, mode: TimerM
         alarmSound.current = null;
       }
     };
-  }, []); // Empty dependency array means this only runs once on mount
+  }, [volume]); // Add volume to dependencies
 
   // Handle timer completion
   useEffect(() => {

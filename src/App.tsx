@@ -8,6 +8,7 @@ import { Navbar } from "@/components/Navbar";
 import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AvatarProvider } from '@/lib/context/avatar';
+import { AudioProvider } from '@/lib/context/audio';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { current: user, isLoading } = useUser();
@@ -77,11 +78,13 @@ function App() {
   return (
     <BrowserRouter>
       <UserProvider>
-        <AvatarProvider>
-          <TimerProvider>
-            <AppContent />
-          </TimerProvider>
-        </AvatarProvider>
+        <AudioProvider>
+          <AvatarProvider>
+            <TimerProvider>
+              <AppContent />
+            </TimerProvider>
+          </AvatarProvider>
+        </AudioProvider>
       </UserProvider>
     </BrowserRouter>
   );

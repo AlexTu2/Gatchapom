@@ -12,6 +12,7 @@ import { toast } from "@/components/ui/use-toast";
 import { Models } from "appwrite";
 import { AUDIO_BUCKET_ID } from "@/lib/audio";
 import { STICKER_SOUND_MAP } from "@/config/stickerSounds";
+import { useAudio } from "@/lib/context/audio";
 
 const BOOSTER_PACK_COST = 100;
 const STICKER_PRICE = 100; // Assuming a default STICKER_PRICE
@@ -33,6 +34,7 @@ export function Store() {
   
   const microLeons = Number(user.current?.prefs.microLeons) || 0;
   const { stickers, isLoading, getStickerUrl } = useStickers();
+  const { volume } = useAudio();
 
   const stickerSounds = useRef<StickerSounds>({});
   const [soundsLoaded, setSoundsLoaded] = useState(false);
@@ -72,6 +74,7 @@ export function Store() {
           if (audio) {
             setPlayingSticker(stickerName);
             audio.currentTime = 0;
+            audio.volume = volume;
             audio.onended = () => {
               setPlayingSticker(null);
               resolve();
@@ -87,7 +90,7 @@ export function Store() {
         });
       }
     }
-  }, []);
+  }, [volume]);
 
   // Parse unlocked stickers first
   const unlockedStickers = useMemo(() => {

@@ -62,7 +62,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
             avatarUrl: null,
             microLeons: "0",
             unlockedStickers: "[]",
-            timerSettings: JSON.stringify(defaultTimerSettings)
+            timerSettings: JSON.stringify(defaultTimerSettings),
+            volume: "0.5"
           };
 
           await account.updatePrefs(initialPrefs);
@@ -82,6 +83,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
           if (!currentPrefs.unlockedStickers) {
             updatedPrefs.unlockedStickers = "[]";
+            needsUpdate = true;
+          }
+
+          if (!currentPrefs.volume) {
+            updatedPrefs.volume = "0.5";
             needsUpdate = true;
           }
 
@@ -194,7 +200,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
         avatarUrl: null,
         microLeons: "0",
         unlockedStickers: "[]",
-        timerSettings: JSON.stringify(defaultTimerSettings)
+        timerSettings: JSON.stringify(defaultTimerSettings),
+        volume: "0.5"
       };
 
       await account.updatePrefs(initialPrefs);

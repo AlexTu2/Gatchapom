@@ -1,6 +1,10 @@
 export interface UserPrefs {
   avatarId?: string | undefined;
   avatarUrl?: string | undefined;
+  microLeons: string;
+  unlockedStickers: string;
+  timerSettings: string;
+  volume: string;
 }
 
 export interface User {
