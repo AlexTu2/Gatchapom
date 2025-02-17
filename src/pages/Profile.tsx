@@ -37,7 +37,12 @@ const passwordSchema = z.object({
 
 export function Profile() {
   const user = useUser();
-  const [error, setError] = useState<string | null>(null);
+  // Separate error states for each form
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  
   const [usernameSuccess, setUsernameSuccess] = useState<string | null>(null);
   const [emailSuccess, setEmailSuccess] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
@@ -78,57 +83,53 @@ export function Profile() {
 
   const onUsernameSubmit = async (values: z.infer<typeof usernameSchema>) => {
     try {
-      setError(null);
+      setUsernameError(null);
       setUsernameSuccess(null);
       
       await account.updateName(values.username);
-      
       const updatedUser = await account.get();
       user.updateUser(updatedUser);
       
       setUsernameSuccess("Username updated successfully!");
     } catch (error) {
       console.error('Error updating username:', error);
-      setError("Failed to update username. Please try again.");
+      setUsernameError("Failed to update username. Please try again.");
     }
   };
 
   async function onEmailSubmit(values: z.infer<typeof emailSchema>) {
     try {
-      setError(null);
+      setEmailError(null);
       setEmailSuccess(null);
       
       await account.updateEmail(values.email, values.password);
-      
-      // Update the user context
       const updated = await account.get();
-      user.current = {
-        $id: updated.$id,
-        $createdAt: updated.$createdAt,
-        email: updated.email,
-        name: updated.name,
-        prefs: {
-          ...updated.prefs,
-          avatarId: updated.prefs.avatarId,
-          avatarUrl: updated.prefs.avatarUrl
-        }
-      };
+      user.updateUser(updated);
       
       setEmailSuccess("Email updated successfully!");
       emailForm.reset({ email: values.email, password: "" });
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Email update error:', err);
-      if (err instanceof Error) {
-        setError(err.message);
+      
+      // Handle specific Appwrite error messages
+      if (err.type === 'user_already_exists') {
+        setEmailError("An account with this email already exists");
+      } else if (err.type === 'invalid_credentials') {
+        setEmailError("Current password is incorrect");
+      } else if (err.message) {
+        setEmailError(err.message);
       } else {
-        setError('Failed to update email');
+        setEmailError('Failed to update email');
       }
+      
+      emailForm.setValue('email', values.email);
+      emailForm.setValue('password', '');
     }
-  }
+  };
 
   async function onPasswordSubmit(values: z.infer<typeof passwordSchema>) {
     try {
-      setError(null);
+      setPasswordError(null);
       setPasswordSuccess(null);
       
       await account.updatePassword(values.newPassword, values.oldPassword);
@@ -138,9 +139,9 @@ export function Profile() {
     } catch (err: unknown) {
       console.error('Password update error:', err);
       if (err instanceof Error) {
-        setError(err.message);
+        setPasswordError(err.message);
       } else {
-        setError('Failed to update password');
+        setPasswordError('Failed to update password');
       }
     }
   }
@@ -148,17 +149,17 @@ export function Profile() {
   async function handleAvatarUpload(event: React.ChangeEvent<HTMLInputElement>) {
     try {
       setIsUploading(true);
-      setError(null);
+      setAvatarError(null);
       const file = event.target.files?.[0];
       if (!file) return;
 
       if (!file.type.startsWith('image/')) {
-        setError('Please upload an image file');
+        setAvatarError('Please upload an image file');
         return;
       }
 
       if (file.size > 5 * 1024 * 1024) {
-        setError('Image must be less than 5MB');
+        setAvatarError('Image must be less than 5MB');
         return;
       }
 
@@ -194,7 +195,7 @@ export function Profile() {
       event.target.value = '';
     } catch (err: unknown) {
       console.error('Avatar upload error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to upload profile picture');
+      setAvatarError(err instanceof Error ? err.message : 'Failed to upload profile picture');
       setAvatarUrl(null);
     } finally {
       setIsUploading(false);
@@ -238,7 +239,7 @@ export function Profile() {
                   onChange={handleAvatarUpload}
                   disabled={isUploading}
                 />
-                {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
+                {avatarError && <p className="text-red-500 text-sm mt-1">{avatarError}</p>}
                 {emailSuccess && <p className="text-green-500 text-sm mt-1">{emailSuccess}</p>}
               </div>
             </div>
@@ -278,7 +279,7 @@ export function Profile() {
             <CardTitle>Update Username</CardTitle>
           </CardHeader>
           <CardContent>
-            {error && <p className="mb-4 text-red-500">{error}</p>}
+            {usernameError && <p className="mb-4 text-red-500">{usernameError}</p>}
             {usernameSuccess && <p className="mb-4 text-green-500">{usernameSuccess}</p>}
             
             <Form {...usernameForm}>
@@ -307,6 +308,9 @@ export function Profile() {
             <CardTitle>Update Email</CardTitle>
           </CardHeader>
           <CardContent>
+            {emailError && <p className="mb-4 text-red-500">{emailError}</p>}
+            {emailSuccess && <p className="mb-4 text-green-500">{emailSuccess}</p>}
+            
             <Form {...emailForm}>
               <form onSubmit={emailForm.handleSubmit(onEmailSubmit)} className="space-y-4">
                 <div>
@@ -345,7 +349,7 @@ export function Profile() {
             <CardTitle>Change Password</CardTitle>
           </CardHeader>
           <CardContent>
-            {error && <p className="mb-4 text-red-500">{error}</p>}
+            {passwordError && <p className="mb-4 text-red-500">{passwordError}</p>}
             {passwordSuccess && <p className="mb-4 text-green-500">{passwordSuccess}</p>}
             
             <Form {...passwordForm}>
