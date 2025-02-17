@@ -3,7 +3,9 @@ import { account } from '../appwrite';
 
 export type TimerMode = 'work' | 'shortBreak' | 'longBreak';
 
-interface TimerContextType {
+export interface TimerContextType {
+  state: 'running' | 'paused' | 'idle';
+  phase: 'work' | 'shortBreak' | 'longBreak';
   mode: TimerMode;
   setMode: (mode: TimerMode) => void;
   isLoading: boolean;
@@ -108,6 +110,8 @@ export function TimerProvider({ children }: { children: ReactNode }) {
 
   return (
     <TimerContext.Provider value={{ 
+      state: 'idle',
+      phase: 'work',
       mode, 
       setMode: handleModeChange, 
       isLoading,

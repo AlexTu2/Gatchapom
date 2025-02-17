@@ -9,6 +9,7 @@ import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AvatarProvider } from '@/lib/context/avatar';
 import { AudioProvider } from '@/lib/context/audio';
+import { YouTubeProvider } from '@/lib/context/youtube';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { current: user, isLoading } = useUser();
@@ -81,7 +82,9 @@ function App() {
         <AudioProvider>
           <AvatarProvider>
             <TimerProvider>
-              <AppContent />
+              <YouTubeProvider>
+                <AppContent />
+              </YouTubeProvider>
             </TimerProvider>
           </AvatarProvider>
         </AudioProvider>

@@ -16,6 +16,7 @@ import { storage } from '@/lib/appwrite';
 import * as audio from '@/lib/audio';
 import { useAudio } from "@/lib/context/audio";
 import { ID, Query, Client } from "appwrite";
+import { YouTubePlayer } from '@/components/YouTubePlayer';
 
 // Define interfaces
 type TimerMode = 'work' | 'shortBreak' | 'longBreak';
@@ -790,6 +791,8 @@ export function Home() {
           )}
         </CardContent>
       </Card>
+
+      <YouTubePlayer />
 
       {/* Chat Section - Only show during breaks */}
       {(mode === 'shortBreak' || mode === 'longBreak') && (
