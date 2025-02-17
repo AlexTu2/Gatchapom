@@ -14,6 +14,8 @@ import { Client } from "appwrite";
 import { StickerPicker } from "@/components/StickerPicker";
 import { useStickers } from '@/lib/hooks/useStickers';
 import { cn } from "@/lib/utils";
+import { storage } from '@/lib/appwrite';
+import * as audio from '@/lib/audio';
 
 // Define interfaces
 type TimerMode = 'work' | 'shortBreak' | 'longBreak';
@@ -38,14 +40,77 @@ function useTimerLogic(settings: TimerSettings, isDevMode: boolean, mode: TimerM
   const [isActive, setIsActive] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [completedPomodoros, setCompletedPomodoros] = useState(0);
-  const alarmSound = useRef(new Audio('/alarm.mp3'));
+  const alarmSound = useRef<HTMLAudioElement | null>(null);
+  const [isAudioLoaded, setIsAudioLoaded] = useState(false);
 
-  // Add this effect to handle timer completion
+  // Initialize and load audio once
   useEffect(() => {
-    if (timeLeft === 0 && isActive) {
+    const loadAudio = async () => {
+      if (alarmSound.current) {
+        // Audio already loaded
+        return;
+      }
+
+      try {
+        // Get audio URL directly from storage
+        const audioUrl = storage.getFileView(audio.AUDIO_BUCKET_ID, 'alarm');
+        
+        if (audioUrl) {
+          const audioElement = new Audio(audioUrl.toString());
+          
+          // Set up event listeners
+          audioElement.addEventListener('canplaythrough', () => {
+            console.log('Audio loaded successfully');
+            setIsAudioLoaded(true);
+          });
+
+          audioElement.addEventListener('error', (e) => {
+            console.error('Audio loading error:', e);
+            // Fallback to local file if Appwrite fails
+            const localAudio = new Audio('/alarm.wav');
+            localAudio.addEventListener('canplaythrough', () => {
+              console.log('Local audio loaded successfully');
+              setIsAudioLoaded(true);
+            });
+            alarmSound.current = localAudio;
+          });
+
+          // Store the audio element in the ref
+          alarmSound.current = audioElement;
+          audioElement.load();
+        }
+      } catch (error) {
+        console.error('Failed to load audio:', error);
+        // Fallback to local file
+        const localAudio = new Audio('/alarm.wav');
+        localAudio.addEventListener('canplaythrough', () => {
+          console.log('Local audio loaded successfully');
+          setIsAudioLoaded(true);
+        });
+        alarmSound.current = localAudio;
+        localAudio.load();
+      }
+    };
+
+    loadAudio();
+
+    // Cleanup
+    return () => {
+      if (alarmSound.current) {
+        alarmSound.current.pause();
+        alarmSound.current = null;
+      }
+    };
+  }, []); // Empty dependency array means this only runs once on mount
+
+  // Handle timer completion
+  useEffect(() => {
+    if (timeLeft === 0 && isActive && isAudioLoaded && alarmSound.current) {
       setIsActive(false);
       setIsRunning(false);
+      
       // Play the alarm sound
+      alarmSound.current.currentTime = 0; // Reset to start
       alarmSound.current.play().catch(error => {
         console.error('Failed to play alarm sound:', error);
       });
@@ -54,27 +119,17 @@ function useTimerLogic(settings: TimerSettings, isDevMode: boolean, mode: TimerM
         setCompletedPomodoros(prev => prev + 1);
       }
     }
-  }, [timeLeft, isActive, mode]);
-
-  // Add this effect to preload the audio
-  useEffect(() => {
-    // Preload the audio file
-    alarmSound.current.load();
-    
-    // Clean up on unmount
-    return () => {
-      alarmSound.current.pause();
-      alarmSound.current.currentTime = 0;
-    };
-  }, []);
+  }, [timeLeft, isActive, mode, isAudioLoaded]);
 
   const resetTimer = useCallback(() => {
     setIsActive(false);
     setIsRunning(false);
     setTimeLeft(settings[mode] * (isDevMode ? 1 : 60));
     // Stop alarm if it's playing
-    alarmSound.current.pause();
-    alarmSound.current.currentTime = 0;
+    if (alarmSound.current) {
+      alarmSound.current.pause();
+      alarmSound.current.currentTime = 0;
+    }
   }, [settings, mode, isDevMode]);
 
   const toggleTimer = useCallback(() => {
