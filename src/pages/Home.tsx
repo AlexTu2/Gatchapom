@@ -100,15 +100,20 @@ function useModeTransition() {
       const currentLeons = Number(user.current.prefs.microLeons) || 0;
       const newLeons = currentLeons + amount;
       
-      const updatedPrefs = {
-        ...user.current.prefs,
+      // Get fresh user data to avoid race conditions
+      const currentUser = await account.get();
+      const updatedPrefs = await account.updatePrefs({
+        ...currentUser.prefs,
         microLeons: newLeons.toString()
-      };
+      });
       
-      await account.updatePrefs(updatedPrefs);
+      // Update local user state with the new prefs
       user.updateUser({
-        ...user.current,
-        prefs: updatedPrefs
+        ...currentUser,
+        prefs: {
+          ...currentUser.prefs,
+          microLeons: newLeons.toString() // Ensure this is updated
+        }
       });
     } catch (error) {
       console.error('Error awarding micro leons:', error);
@@ -318,75 +323,21 @@ function useChat(
 
 // Create a custom hook for settings management
 function useSettings(user: ReturnType<typeof useUser>) {
-  const [settings, setSettings] = useState<TimerSettings>(DEFAULT_SETTINGS);
-  const [isSettingsLoading, setIsSettingsLoading] = useState(true);
+  const { settings, updateSettings } = useTimer();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // Load settings from Appwrite
-  useEffect(() => {
-    let mounted = true;
-    
-    async function loadSettings() {
-      if (!user?.current?.$id) {
-        if (mounted) setIsSettingsLoading(false);
-        return;
-      }
-      
-      try {
-        const response = await databases.listDocuments(
-          DATABASE_ID,
-          'timer_settings',
-          [Query.equal('userId', user.current.$id)]
-        );
-
-        if (!mounted) return;
-
-        if (response.documents.length > 0) {
-          const doc = response.documents[0];
-          const parsedSettings = JSON.parse(doc.settings);
-          
-          const cleanSettings: TimerSettings = {
-            work: parsedSettings.work ?? DEFAULT_SETTINGS.work,
-            shortBreak: parsedSettings.shortBreak ?? DEFAULT_SETTINGS.shortBreak,
-            longBreak: parsedSettings.longBreak ?? DEFAULT_SETTINGS.longBreak,
-            longBreakInterval: parsedSettings.longBreakInterval ?? DEFAULT_SETTINGS.longBreakInterval
-          };
-          
-          setSettings(cleanSettings);
-        }
-      } catch (error) {
-        console.error('Error loading settings:', error);
-      } finally {
-        if (mounted) setIsSettingsLoading(false);
-      }
-    }
-
-    loadSettings();
-    return () => { mounted = false; };
-  }, [user.current]);
-
   const saveSettings = useCallback(async (newSettings: TimerSettings) => {
-    if (!user?.current?.$id) {
-      console.warn('No user found, skipping settings save');
-      return;
-    }
-
     try {
-      await databases.updateDocument(
-        DATABASE_ID,
-        'timer_settings',
-        user.current.$id,
-        { settings: JSON.stringify(newSettings) }
-      );
+      await updateSettings(newSettings);
     } catch (error) {
       console.error('Error saving settings:', error);
     }
-  }, [user]);
+  }, [updateSettings]);
 
   return {
     settings,
-    setSettings,
-    isSettingsLoading,
+    setSettings: updateSettings,
+    isSettingsLoading: false,
     isSettingsOpen,
     setIsSettingsOpen,
     saveSettings
@@ -588,27 +539,29 @@ export function Home() {
           {isSettingsOpen ? (
             <div className="space-y-4">
               {Object.entries(settings).map(([key, value]) => (
-                <div key={key} className="flex flex-col space-y-2">
-                  <Label htmlFor={key}>
-                    {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} 
-                    Duration ({isDevMode ? 'seconds' : 'minutes'})
-                  </Label>
-                  <Input
-                    id={key}
-                    type="number"
-                    min="1"
-                    max={isDevMode ? 300 : 60}
-                    value={value}
-                    onChange={(e) => {
-                      const newValue = parseInt(e.target.value);
-                      const maxValue = isDevMode ? 300 : 60;
-                      if (newValue > 0 && newValue <= maxValue) {
-                        const newSettings = { ...settings, [key]: newValue };
-                        setSettings(newSettings);
-                      }
-                    }}
-                  />
-                </div>
+                key !== 'currentMode' && (
+                  <div key={key} className="flex flex-col space-y-2">
+                    <Label htmlFor={key}>
+                      {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} 
+                      Duration ({isDevMode ? 'seconds' : 'minutes'})
+                    </Label>
+                    <Input
+                      id={key}
+                      type="number"
+                      min="1"
+                      max={isDevMode ? 300 : 60}
+                      value={value}
+                      onChange={(e) => {
+                        const newValue = parseInt(e.target.value);
+                        const maxValue = isDevMode ? 300 : 60;
+                        if (newValue > 0 && newValue <= maxValue) {
+                          const newSettings = { ...settings, [key]: newValue };
+                          setSettings(newSettings);
+                        }
+                      }}
+                    />
+                  </div>
+                )
               ))}
               <Button 
                 className="w-full mt-4"

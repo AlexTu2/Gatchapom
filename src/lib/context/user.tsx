@@ -26,21 +26,55 @@ export function UserProvider({ children }: { children: ReactNode }) {
     // Check if user is logged in
     account.get()
       .then(async (response) => {
-        // Initialize preferences if they don't exist
-        if (!response.prefs?.avatarUrl && !response.prefs?.microLeons) {
-          await account.updatePrefs({
+        // For completely new users with no prefs
+        if (!response.prefs) {
+          const defaultTimerSettings = {
+            work: 25,
+            shortBreak: 5,
+            longBreak: 15,
+            longBreakInterval: 4,
+            currentMode: 'work'
+          };
+
+          const initialPrefs = {
             avatarUrl: null,
             microLeons: "0",
-            unlockedStickers: "[]"
-          });
-          // Fetch updated user data
+            unlockedStickers: "[]",
+            timerSettings: JSON.stringify(defaultTimerSettings)
+          };
+
+          await account.updatePrefs(initialPrefs);
           const updatedUser = await account.get();
           setUser(updatedUser);
         } else {
-          setUser(response);
+          // For existing users, ensure timerSettings exists
+          const currentPrefs = response.prefs;
+          let needsUpdate = false;
+          let updatedPrefs = { ...currentPrefs };
+
+          // Initialize missing preferences
+          if (!currentPrefs.microLeons) {
+            updatedPrefs.microLeons = currentPrefs.microLeons || "0";
+            needsUpdate = true;
+          }
+
+          if (!currentPrefs.unlockedStickers) {
+            updatedPrefs.unlockedStickers = currentPrefs.unlockedStickers || "[]";
+            needsUpdate = true;
+          }
+
+          // Only update if we need to
+          if (needsUpdate) {
+            await account.updatePrefs(updatedPrefs);
+            const updatedUser = await account.get();
+            setUser(updatedUser);
+          } else {
+            setUser(response);
+          }
         }
       })
-      .catch(() => {
+      .catch((error) => {
+        console.error('Error getting user:', error);
         setUser(null);
       })
       .finally(() => {
@@ -98,15 +132,24 @@ export function UserProvider({ children }: { children: ReactNode }) {
       await account.create(ID.unique(), email, password, username);
       await account.createEmailPasswordSession(email, password);
       const loggedInUser = await account.get();
-      const updatedUser = await account.updatePrefs({
+      
+      const initialPrefs = {
         avatarId: undefined,
-        avatarUrl: undefined,
+        avatarUrl: null,
         microLeons: "0",
-        unlockedStickers: "[]"
-      });
-      const typedPrefs = updatedUser as unknown as UserPrefs;
-      setUser({ ...loggedInUser, prefs: typedPrefs });
-      navigate('/');  // Use navigate instead of window.location
+        unlockedStickers: "[]",
+        timerSettings: JSON.stringify({
+          work: 25,
+          shortBreak: 5,
+          longBreak: 15,
+          longBreakInterval: 4,
+          currentMode: 'work'
+        })
+      };
+
+      const updatedUser = await account.updatePrefs(initialPrefs);
+      setUser({ ...loggedInUser, prefs: updatedUser });
+      navigate('/');
     } catch (error) {
       console.error('Registration error:', error);
       throw error;
@@ -114,7 +157,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
   };
 
   const updateUser = (updatedUser: Models.User<Models.Preferences>) => {
-    setUser(updatedUser);
+    // Ensure prefs are properly structured
+    const typedUser = {
+      ...updatedUser,
+      prefs: {
+        ...updatedUser.prefs,
+        microLeons: updatedUser.prefs.microLeons || "0",
+        unlockedStickers: updatedUser.prefs.unlockedStickers || "[]",
+        timerSettings: updatedUser.prefs.timerSettings || JSON.stringify(DEFAULT_SETTINGS)
+      }
+    };
+    setUser(typedUser);
   };
 
   return (
