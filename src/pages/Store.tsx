@@ -13,6 +13,7 @@ import { Models } from "appwrite";
 
 const BOOSTER_PACK_COST = 100;
 const STICKER_PRICE = 100; // Assuming a default STICKER_PRICE
+const MAX_PACKS = 10;
 
 export function Store() {
   const user = useUser();
@@ -21,6 +22,8 @@ export function Store() {
   const [currentSticker, setCurrentSticker] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [justUnlocked, setJustUnlocked] = useState<string | null>(null);
+  const [packCount, setPackCount] = useState(1);
+  const [openedStickers, setOpenedStickers] = useState<Models.File[]>([]);
   
   const microLeons = Number(user.current?.prefs.microLeons) || 0;
   const { stickers, isLoading, getStickerUrl } = useStickers();
@@ -57,46 +60,49 @@ export function Store() {
   }, [unlockedStickers]);
 
   const openBoosterPack = useCallback(async () => {
-    if (!user.current || microLeons < BOOSTER_PACK_COST || !stickers.length) return;
+    const totalCost = BOOSTER_PACK_COST * packCount;
+    if (!user.current || microLeons < totalCost || !stickers.length) return;
 
     setIsOpening(true);
     
     try {
-      // Select a random sticker
-      const randomSticker = stickers[Math.floor(Math.random() * stickers.length)];
-      const stickerName = randomSticker.name;
+      // Select random stickers
+      const newStickers: Models.File[] = [];
+      const updatedStickers = { ...unlockedStickers };
       
-      // Update user preferences
-      const updatedMicroLeons = microLeons - BOOSTER_PACK_COST;
-      
-      // Update the sticker count in the dictionary
-      const updatedStickers = {
-        ...unlockedStickers,
-        [stickerName]: (unlockedStickers[stickerName] || 0) + 1
-      };
+      for (let i = 0; i < packCount; i++) {
+        const randomSticker = stickers[Math.floor(Math.random() * stickers.length)];
+        newStickers.push(randomSticker);
+        
+        // Update the sticker count
+        const stickerName = randomSticker.name;
+        updatedStickers[stickerName] = (updatedStickers[stickerName] || 0) + 1;
+      }
 
-      // Only update the specific fields we need to change
+      // Update user preferences
+      const updatedMicroLeons = microLeons - totalCost;
+      
       await user.updateUser({
         microLeons: updatedMicroLeons.toString(),
         unlockedStickers: JSON.stringify(updatedStickers)
       });
 
-      setCurrentSticker(randomSticker.$id);
-      setJustUnlocked(randomSticker.$id);
+      setOpenedStickers(newStickers);
       setShowReward(true);
 
       // Trigger confetti effect
       confetti({
-        particleCount: 100,
+        particleCount: 100 * packCount, // More confetti for more packs!
         spread: 70,
         origin: { y: 0.6 }
       });
     } catch (error) {
-      console.error('Failed to open booster pack:', error);
+      console.error('Failed to open booster packs:', error);
+      alert('Failed to open booster packs. Please try again.');
     } finally {
       setIsOpening(false);
     }
-  }, [user, microLeons, stickers, unlockedStickers]);
+  }, [user, microLeons, stickers, unlockedStickers, packCount]);
 
   const handleUpload = async () => {
     if (isUploading) return;
@@ -197,9 +203,9 @@ export function Store() {
             </div>
 
             <div className="p-6 border rounded-lg text-center space-y-4">
-              <h3 className="text-lg font-semibold">Booster Pack</h3>
+              <h3 className="text-lg font-semibold">Booster Pack{packCount > 1 ? 's' : ''}</h3>
               <p className="text-sm text-gray-600">
-                Contains one random sticker
+                Contains {packCount} random sticker{packCount > 1 ? 's' : ''}
               </p>
               <div className="flex items-center justify-center gap-2">
                 {microLeonSticker && (
@@ -209,14 +215,31 @@ export function Store() {
                     className="h-6 w-6"
                   />
                 )}
-                <span>{BOOSTER_PACK_COST}</span>
+                <span>{BOOSTER_PACK_COST * packCount}</span>
+              </div>
+              <div className="flex items-center justify-center gap-4 mb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPackCount(Math.max(1, packCount - 1))}
+                >
+                  -
+                </Button>
+                <span className="w-16 text-center">{packCount} pack{packCount > 1 ? 's' : ''}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPackCount(Math.min(MAX_PACKS, packCount + 1))}
+                >
+                  +
+                </Button>
               </div>
               <Button
                 onClick={openBoosterPack}
-                disabled={isOpening || microLeons < BOOSTER_PACK_COST}
+                disabled={isOpening || microLeons < (BOOSTER_PACK_COST * packCount)}
                 className="w-full"
               >
-                {isOpening ? 'Opening...' : 'Open Pack'}
+                {isOpening ? 'Opening...' : `Open ${packCount} Pack${packCount > 1 ? 's' : ''}`}
               </Button>
             </div>
 
@@ -287,10 +310,10 @@ export function Store() {
       <Dialog open={showReward} onOpenChange={handleRewardClose}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>New Sticker Unlocked! 🎉</DialogTitle>
+            <DialogTitle>New Sticker{openedStickers.length > 1 ? 's' : ''} Unlocked! 🎉</DialogTitle>
             <DialogDescription asChild>
               <div className="space-y-2">
-                <div>You've unlocked a new sticker for your collection!</div>
+                <div>You've unlocked {openedStickers.length} new sticker{openedStickers.length > 1 ? 's' : ''} for your collection!</div>
                 <div className="font-medium text-yellow-600 flex items-center gap-2">
                   {microLeonSticker && (
                     <img 
@@ -303,26 +326,31 @@ export function Store() {
                       }}
                     />
                   )}
-                  You spent {BOOSTER_PACK_COST} micro leons!
+                  You spent {BOOSTER_PACK_COST * packCount} micro leons!
                 </div>
               </div>
             </DialogDescription>
           </DialogHeader>
-          {currentSticker && (
-            <div className="flex flex-col items-center gap-4 py-4">
-              <div className="w-32 h-32 flex items-center justify-center">
-                <img 
-                  src={getStickerUrl(currentSticker)}
-                  alt="New Sticker"
-                  className="w-full h-full object-contain"
-                  onError={(e) => {
-                    console.error('Failed to load new sticker');
-                    e.currentTarget.src = '/fallback-sticker.png';
-                  }}
-                />
+          <div className="grid grid-cols-2 gap-4 py-4">
+            {openedStickers.map((sticker, index) => (
+              <div key={index} className="flex flex-col items-center">
+                <div className="w-24 h-24 flex items-center justify-center">
+                  <img 
+                    src={getStickerUrl(sticker.$id)}
+                    alt={`New Sticker ${index + 1}`}
+                    className="w-full h-full object-contain"
+                    onError={(e) => {
+                      console.error('Failed to load new sticker');
+                      e.currentTarget.src = '/fallback-sticker.png';
+                    }}
+                  />
+                </div>
+                <span className="text-xs text-center mt-2">
+                  {sticker.name.replace('.png', '').split('-').join(' ')}
+                </span>
               </div>
-            </div>
-          )}
+            ))}
+          </div>
           <div className="flex justify-end">
             <Button onClick={handleRewardClose}>
               Nice!
