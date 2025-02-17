@@ -1,16 +1,16 @@
 import { storage } from '../appwrite';
 import { useEffect, useState, useRef } from 'react';
-import { Models } from 'appwrite';
 import { STICKERS_BUCKET_ID } from '../uploadStickers';
-
-interface StickerMap {
-  [key: string]: string; // filename -> fileId
-}
 
 export function useStickers() {
   const [nameToId, setNameToId] = useState<Record<string, string>>({});
   const [idToName, setIdToName] = useState<Record<string, string>>({});
-  const [stickers, setStickers] = useState<Models.File[]>([]);
+  const [stickers, setStickers] = useState<{
+    $id: string;
+    name: string;
+    $createdAt: string;
+    $updatedAt: string;
+  }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const loadedRef = useRef(false);
   const loggedRef = useRef(false); // New ref to track if we've logged
@@ -21,14 +21,14 @@ export function useStickers() {
     async function loadStickers() {
       try {
         const response = await storage.listFiles(STICKERS_BUCKET_ID);
-        const stickerFiles = response.files.filter(file => 
+        const stickerFiles = response.files.filter((file: { name: string; }) => 
           file.name.endsWith('.png') || file.name.endsWith('.gif')
         );
 
         const newNameToId: Record<string, string> = {};
         const newIdToName: Record<string, string> = {};
 
-        stickerFiles.forEach(file => {
+        stickerFiles.forEach((file: { name: string; $id: string; }) => {
           const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
           newNameToId[file.name] = file.$id;
           newNameToId[nameWithoutExt] = file.$id;
@@ -43,7 +43,7 @@ export function useStickers() {
         if (process.env.NODE_ENV === 'development' && !loggedRef.current) {
           console.debug('Sticker mappings loaded:', {
             count: stickerFiles.length,
-            stickers: stickerFiles.map(s => s.name)
+            stickers: stickerFiles.map((s: { name: string; }) => s.name)
           });
           loggedRef.current = true;
         }
@@ -70,7 +70,7 @@ export function useStickers() {
       const fileId = nameToId[nameOrId] || nameOrId;
       return storage.getFileView(STICKERS_BUCKET_ID, fileId);
     } catch (error) {
-      console.error('Failed to get sticker URL');
+      console.error('Failed to get sticker URL:', error);
       return '/fallback-sticker.png';
     }
   };

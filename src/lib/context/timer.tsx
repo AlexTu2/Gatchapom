@@ -1,6 +1,5 @@
 import { createContext, useContext, ReactNode, useState, useEffect } from "react";
 import { useUser } from "./user";
-import { account } from "../appwrite";
 
 export type TimerMode = 'work' | 'shortBreak' | 'longBreak';
 
@@ -134,13 +133,14 @@ export function useTimer() {
 }
 
 // Add helper function to validate timer settings
-function isValidTimerSettings(settings: any): settings is TimerSettings {
+function isValidTimerSettings(settings: unknown): settings is TimerSettings {
   return (
     typeof settings === 'object' &&
-    typeof settings.work === 'number' &&
-    typeof settings.shortBreak === 'number' &&
-    typeof settings.longBreak === 'number' &&
-    typeof settings.longBreakInterval === 'number' &&
-    (!settings.currentMode || typeof settings.currentMode === 'string')
+    settings !== null &&
+    typeof (settings as TimerSettings).work === 'number' &&
+    typeof (settings as TimerSettings).shortBreak === 'number' &&
+    typeof (settings as TimerSettings).longBreak === 'number' &&
+    typeof (settings as TimerSettings).longBreakInterval === 'number' &&
+    (!('currentMode' in settings) || typeof (settings as TimerSettings).currentMode === 'string')
   );
 } 

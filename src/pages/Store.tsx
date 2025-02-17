@@ -3,19 +3,17 @@ import { useUser } from "@/lib/context/user";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { account, storage } from "@/lib/appwrite";
+import { storage } from "@/lib/appwrite";
 import confetti from 'canvas-confetti';
 import { Lock } from "lucide-react";
 import { useStickers } from '@/lib/hooks/useStickers';
 import { uploadStickers } from '@/lib/uploadStickers';
-import { toast } from "@/components/ui/use-toast";
 import { Models } from "appwrite";
 import { AUDIO_BUCKET_ID } from "@/lib/audio";
 import { STICKER_SOUND_MAP } from "@/config/stickerSounds";
 import { useAudio } from "@/lib/context/audio";
 
 const BOOSTER_PACK_COST = 100;
-const STICKER_PRICE = 100; // Assuming a default STICKER_PRICE
 const MAX_PACKS = 10;
 
 interface StickerSounds {
@@ -26,9 +24,7 @@ export function Store() {
   const user = useUser();
   const [isOpening, setIsOpening] = useState(false);
   const [showReward, setShowReward] = useState(false);
-  const [currentSticker, setCurrentSticker] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [justUnlocked, setJustUnlocked] = useState<string | null>(null);
   const [packCount, setPackCount] = useState(1);
   const [openedStickers, setOpenedStickers] = useState<Models.File[]>([]);
   
@@ -101,7 +97,7 @@ export function Store() {
       console.error('Failed to parse unlockedStickers:', e);
       return {};
     }
-  }, [user.current?.prefs.unlockedStickers]);
+  }, [user]);
 
   // Then create the check function using the parsed data
   const checkIfUnlocked = useCallback((stickerId: string) => {
@@ -111,19 +107,14 @@ export function Store() {
 
   const microLeonSticker = useMemo(() => ({
     $id: '67b27bbc001cba8f5ed9',
-    name: 'microLeon.png'
+    name: 'microLeon.png',
+    $createdAt: new Date().toISOString(),
+    $updatedAt: new Date().toISOString()
   }), []);
 
   // Create a map to count sticker quantities
-  const stickerCounts = useMemo(() => {
-    const counts: { [key: string]: number } = {};
-    Object.entries(unlockedStickers).forEach(([sticker, count]) => {
-      counts[sticker] = count;
-    });
-    return counts;
-  }, [unlockedStickers]);
 
-  const retryOperation = async (operation: () => Promise<any>, maxAttempts = 3, delay = 1000) => {
+  const retryOperation = async <T,>(operation: () => Promise<T>, maxAttempts = 3, delay = 1000): Promise<T> => {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         return await operation();
@@ -133,6 +124,7 @@ export function Store() {
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
+    throw new Error('Operation failed after all attempts');
   };
 
   const openBoosterPack = useCallback(async () => {
@@ -207,46 +199,6 @@ export function Store() {
     setTimeout(() => {
       setJustUnlocked(null);
     }, 1000); // Shorter duration since user has already seen it
-  };
-
-  const purchaseSticker = async (sticker: Models.File) => {
-    if (!user.current) return;
-
-    try {
-      // Get fresh user data
-      const currentUser = await account.get();
-      
-      // Parse current microLeons and unlockedStickers
-      const currentLeons = Number(currentUser.prefs.microLeons) || 0;
-      let unlockedStickers;
-      try {
-        unlockedStickers = JSON.parse(currentUser.prefs.unlockedStickers || '{}');
-      } catch {
-        unlockedStickers = {};
-      }
-
-      // Check if user can afford the sticker
-      if (currentLeons < STICKER_PRICE) {
-        alert("Not enough micro leons! You need " + STICKER_PRICE + " micro leons to purchase this sticker.");
-        return;
-      }
-
-      // Update sticker count
-      const stickerName = sticker.name;
-      unlockedStickers[stickerName] = (unlockedStickers[stickerName] || 0) + 1;
-
-      // Update user preferences with new values
-      await user.updateUser({
-        microLeons: (currentLeons - STICKER_PRICE).toString(),
-        unlockedStickers: JSON.stringify(unlockedStickers)
-      });
-
-      alert("Sticker purchased! You can now use this sticker in chat.");
-
-    } catch (error) {
-      console.error('Error purchasing sticker:', error);
-      alert("Purchase failed. There was an error purchasing the sticker.");
-    }
   };
 
   if (isLoading) {
@@ -469,4 +421,4 @@ export function Store() {
       </Dialog>
     </div>
   );
-} 
+}

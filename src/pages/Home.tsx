@@ -6,17 +6,16 @@ import { Label } from "@/components/ui/label";
 import { useUser } from "../lib/context/user";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { databases, DATABASE_ID, account } from "../lib/appwrite";
-import { ID, Query, Models } from "appwrite";
 import { useTimer } from "@/lib/context/timer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronDown } from "lucide-react";
-import { Client } from "appwrite";
 import { StickerPicker } from "@/components/StickerPicker";
 import { useStickers } from '@/lib/hooks/useStickers';
 import { cn } from "@/lib/utils";
 import { storage } from '@/lib/appwrite';
 import * as audio from '@/lib/audio';
 import { useAudio } from "@/lib/context/audio";
+import { ID, Query, Client } from "appwrite";
 
 // Define interfaces
 type TimerMode = 'work' | 'shortBreak' | 'longBreak';
@@ -26,13 +25,16 @@ interface TimerSettings {
   shortBreak: number;
   longBreak: number;
   longBreakInterval: number;
+  currentMode: TimerMode;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const DEFAULT_SETTINGS: TimerSettings = {
   work: 25,
   shortBreak: 5,
   longBreak: 15,
-  longBreakInterval: 4
+  longBreakInterval: 4,
+  currentMode: 'work'
 };
 
 // Create a custom hook for timer logic
@@ -468,7 +470,7 @@ function useChat(
 }
 
 // Create a custom hook for settings management
-function useSettings(user: ReturnType<typeof useUser>) {
+function useSettings() {
   const { settings, updateSettings } = useTimer();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -537,7 +539,7 @@ function MessageContent({ content, isOwnMessage }: { content: string, isOwnMessa
 }
 
 // Add this hook at the top with other hooks
-function useUnlockedStickers(user: ReturnType<typeof useUser>, stickers: Models.File[]) {
+function useUnlockedStickers(user: ReturnType<typeof useUser>, stickers: { $id: string, name: string }[]) {
   return useMemo(() => {
     try {
       const parsed = JSON.parse(user.current?.prefs.unlockedStickers || '{}');
@@ -564,21 +566,20 @@ function useUnlockedStickers(user: ReturnType<typeof useUser>, stickers: Models.
 export function Home() {
   const user = useUser();
   const { mode } = useTimer();
-  const [isDevMode, setIsDevMode] = useState(() => localStorage.getItem('devMode') === 'true');
+  const [isDevMode, setIsDevMode] = useState(() => {
+    const saved = localStorage.getItem('isDevMode');
+    return saved ? JSON.parse(saved) : false;
+  });
   const [showCompletionDialog, setShowCompletionDialog] = useState(false);
   const { getStickerUrl, stickers } = useStickers();
-  const [isNearBottom, setIsNearBottom] = useState(true);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const {
     settings,
     setSettings,
     isSettingsLoading,
     isSettingsOpen,
-    setIsSettingsOpen,
-    saveSettings
-  } = useSettings(user);
+    setIsSettingsOpen
+  } = useSettings();
 
   const {
     timeLeft,
@@ -588,8 +589,7 @@ export function Home() {
     completedPomodoros,
     setCompletedPomodoros,
     resetTimer,
-    toggleTimer,
-    alarmSound
+    toggleTimer
   } = useTimerLogic(settings, isDevMode, mode);
 
   const { handleModeChange, awardMicroLeons } = useModeTransition();
@@ -673,6 +673,11 @@ export function Home() {
     return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   }, [isDevMode]);
 
+  // Add effect to save changes
+  useEffect(() => {
+    localStorage.setItem('isDevMode', JSON.stringify(isDevMode));
+  }, [isDevMode]);
+
   // Don't render until everything is loaded
   if (isSettingsLoading) {
     return null;
@@ -732,7 +737,7 @@ export function Home() {
               <Button 
                 className="w-full mt-4"
                 onClick={() => {
-                  saveSettings(settings);
+                  setSettings(settings);
                   setIsSettingsOpen(false);
                 }}
               >

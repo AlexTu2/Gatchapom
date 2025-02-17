@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useStickers } from '@/lib/hooks/useStickers';
 import { useAvatar } from '@/lib/context/avatar';
@@ -15,7 +15,7 @@ import { VolumeControl } from './VolumeControl';
 export function Navbar() {
   const user = useUser();
   const navigate = useNavigate();
-  const { getStickerUrl, stickers } = useStickers();
+  const { getStickerUrl } = useStickers();
   const { avatarUrl, setAvatarUrl } = useAvatar();
   const microLeons = Number(user.current?.prefs.microLeons) || 0;
 
@@ -27,7 +27,7 @@ export function Navbar() {
     } else {
       setAvatarUrl(null);
     }
-  }, [user.current?.prefs.avatarUrl, setAvatarUrl]);
+  }, [user.current?.prefs.avatarUrl, setAvatarUrl, user]);
 
   // Find microLeon sticker
   const microLeonSticker = useMemo(() => ({

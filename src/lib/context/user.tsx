@@ -1,10 +1,7 @@
-import { ID } from "appwrite";
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { account, BUCKET_ID, storage } from "../appwrite";
-import type { UserPrefs } from '../types/user';
+import { account, BUCKET_ID, ID, storage } from "../appwrite";
 import { Models } from "appwrite";
 import { useNavigate } from 'react-router-dom';
-import { TimerSettings } from './timer';
 
 interface UserContextType {
   current: Models.User<Models.Preferences> | null;
@@ -17,15 +14,6 @@ interface UserContextType {
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
-
-// Add DEFAULT_SETTINGS definition
-const DEFAULT_SETTINGS: TimerSettings = {
-  work: 25,
-  shortBreak: 5,
-  longBreak: 15,
-  longBreakInterval: 4,
-  currentMode: 'work'
-};
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Models.User<Models.Preferences> | null>(null);
@@ -73,7 +61,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           // For existing users, ensure timerSettings exists
           const currentPrefs = response.prefs;
           let needsUpdate = false;
-          let updatedPrefs = { ...currentPrefs };
+          const updatedPrefs = { ...currentPrefs };
 
           // Initialize missing preferences
           if (!currentPrefs.microLeons) {
@@ -100,11 +88,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
             if (isMounted) setUser(response);
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Handle unauthorized or missing scope errors silently
-        if (error?.code === 401 || 
-            error?.message?.includes('missing scope (account)') ||
-            error?.message?.includes('Unauthorized')) {
+        if (
+          (error as { code?: number })?.code === 401 || 
+          (error as { message?: string })?.message?.includes('missing scope (account)')
+        ) {
           if (isMounted) {
             setUser(null);
             // Only navigate if we're not already on the login or register page

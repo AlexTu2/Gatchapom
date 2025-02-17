@@ -9,7 +9,6 @@ import { useForm } from "react-hook-form";
 import { account, storage, BUCKET_ID } from "../lib/appwrite";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ID } from "appwrite";
-import { UserPrefs } from "@/lib/types/user";
 import { useAvatar } from '@/lib/context/avatar';
 
 const usernameSchema = z.object({
@@ -75,11 +74,10 @@ export function Profile() {
   });
 
   useEffect(() => {
-    // Update avatar URL when user preferences change
     if (user.current?.prefs.avatarUrl) {
       setAvatarUrl(user.current.prefs.avatarUrl);
     }
-  }, [user.current?.prefs.avatarUrl]);
+  }, [user.current?.prefs.avatarUrl, setAvatarUrl, user]);
 
   const onUsernameSubmit = async (values: z.infer<typeof usernameSchema>) => {
     try {
@@ -108,16 +106,16 @@ export function Profile() {
       
       setEmailSuccess("Email updated successfully!");
       emailForm.reset({ email: values.email, password: "" });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Email update error:', err);
       
       // Handle specific Appwrite error messages
-      if (err.type === 'user_already_exists') {
+      if ((err as { type?: string; message?: string }).type === 'user_already_exists') {
         setEmailError("An account with this email already exists");
-      } else if (err.type === 'invalid_credentials') {
+      } else if ((err as { type?: string }).type === 'invalid_credentials') {
         setEmailError("Current password is incorrect");
-      } else if (err.message) {
-        setEmailError(err.message);
+      } else if ((err as { message?: string }).message) {
+        setEmailError((err as { message: string }).message);
       } else {
         setEmailError('Failed to update email');
       }
