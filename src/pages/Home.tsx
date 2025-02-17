@@ -114,8 +114,9 @@ function useTimerLogic(settings: TimerSettings, isDevMode: boolean, mode: TimerM
       setIsActive(false);
       setIsRunning(false);
       
-      // Play the alarm sound
-      alarmSound.current.currentTime = 0; // Reset to start
+      // Ensure volume is set before playing
+      alarmSound.current.volume = volume;
+      alarmSound.current.currentTime = 0;
       alarmSound.current.play().catch(error => {
         console.error('Failed to play alarm sound:', error);
       });
@@ -124,7 +125,7 @@ function useTimerLogic(settings: TimerSettings, isDevMode: boolean, mode: TimerM
         setCompletedPomodoros(prev => prev + 1);
       }
     }
-  }, [timeLeft, isActive, mode, isAudioLoaded]);
+  }, [timeLeft, isActive, mode, isAudioLoaded, volume]);
 
   const resetTimer = useCallback(() => {
     setIsActive(false);
@@ -161,6 +162,13 @@ function useTimerLogic(settings: TimerSettings, isDevMode: boolean, mode: TimerM
 
     return () => clearInterval(interval);
   }, [isActive, timeLeft]);
+
+  // In the useTimerLogic hook, update the volume when it changes
+  useEffect(() => {
+    if (alarmSound.current) {
+      alarmSound.current.volume = volume;
+    }
+  }, [volume]);
 
   return {
     timeLeft,
@@ -356,56 +364,65 @@ function useChat(
   useEffect(() => {
     let wsClient: Client | null = null;
     let unsubscribe: (() => void) | null = null;
+    let reconnectTimeout: NodeJS.Timeout;
 
-    // Create WebSocket connection immediately
-    wsClient = new Client()
-      .setEndpoint('https://cloud.appwrite.io/v1')
-      .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
-    
-    try {
-      // Subscribe with error handling
-      unsubscribe = wsClient.subscribe([
-        `databases.${DATABASE_ID}.collections.messages.documents`
-      ], response => {
-        if (response.events.includes('databases.*.collections.*.documents.*.create')) {
-          const newMessage = response.payload as AppwriteMessage;
-          setMessages(prev => [...prev, newMessage]);
+    const setupWebSocket = async () => {
+      try {
+        if (wsClient) {
+          // Check if disconnect method exists before calling
+          if (typeof wsClient.disconnect === 'function') {
+            wsClient.disconnect();
+          }
         }
-      });
 
-      // Add error handler
-      wsClient.subscribe('error', (error) => {
-        console.error('WebSocket error:', error);
-        // Attempt to reconnect
+        wsClient = new Client()
+          .setEndpoint('https://cloud.appwrite.io/v1')
+          .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
+
+        // Clean up any existing subscription
         if (unsubscribe) {
           unsubscribe();
-          unsubscribe = wsClient?.subscribe([
-            `databases.${DATABASE_ID}.collections.messages.documents`
-          ], response => {
-            if (response.events.includes('databases.*.collections.*.documents.*.create')) {
-              const newMessage = response.payload as AppwriteMessage;
-              setMessages(prev => [...prev, newMessage]);
-            }
-          });
+          unsubscribe = null;
         }
-      });
 
-    } catch (error) {
-      console.error('Error setting up WebSocket:', error);
-    }
+        // Set up new subscription
+        unsubscribe = wsClient.subscribe([
+          `databases.${DATABASE_ID}.collections.messages.documents`
+        ], response => {
+          if (response.events.includes('databases.*.collections.*.documents.*.create')) {
+            const newMessage = response.payload as AppwriteMessage;
+            setMessages(prev => [...prev, newMessage]);
+            
+            if (isNearBottom) {
+              setTimeout(scrollToBottom, 100);
+            } else {
+              setShowScrollButton(true);
+            }
+          }
+        });
+
+      } catch (error) {
+        console.error('WebSocket connection error:', error);
+        // Attempt to reconnect after 5 seconds
+        reconnectTimeout = setTimeout(setupWebSocket, 5000);
+      }
+    };
+
+    setupWebSocket();
 
     // Cleanup function
     return () => {
-      if (unsubscribe) {
-        try {
-          unsubscribe();
-        } catch (error) {
-          console.error('Error cleaning up WebSocket:', error);
-        }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
       }
-      wsClient = null;
+      if (unsubscribe) {
+        unsubscribe();
+      }
+      if (wsClient && typeof wsClient.disconnect === 'function') {
+        wsClient.disconnect();
+      }
     };
-  }, []); // Empty dependency array means this runs once on mount
+  }, []); // Empty dependency array since we want this to run once
 
   // Separate useEffect for loading messages when entering break mode
   useEffect(() => {
