@@ -17,6 +17,8 @@ import * as audio from '@/lib/audio';
 import { useAudio } from "@/lib/context/audio";
 import { ID, Query, Client } from "appwrite";
 import { YouTubeAudioPlayer } from '@/components/YouTubeAudioPlayer';
+import { motion } from "framer-motion";
+import { useScroll } from "framer-motion";
 
 // Define interfaces
 type TimerMode = 'work' | 'shortBreak' | 'longBreak';
@@ -678,6 +680,15 @@ export function Home() {
     localStorage.setItem('isDevMode', JSON.stringify(isDevMode));
   }, [isDevMode]);
 
+  const { scrollY } = useScroll();
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    return scrollY.onChange((latest) => {
+      setIsScrolled(latest > 100);
+    });
+  }, [scrollY]);
+
   // Don't render until everything is loaded
   if (isSettingsLoading) {
     return null;
@@ -686,112 +697,132 @@ export function Home() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex gap-8">
-        <Card className="w-full max-w-md">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-2xl font-bold">Pomodoro Timer</CardTitle>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsDevMode(!isDevMode)}
-                className="text-xs"
-              >
-                {isDevMode ? '🐛 Dev' : '⏰ Normal'}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              >
-                ⚙️ Settings
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isSettingsOpen ? (
-              <div className="space-y-4">
-                {Object.entries(settings).map(([key, value]) => (
-                  key !== 'currentMode' && (
-                    <div key={key} className="flex flex-col space-y-2">
-                      <Label htmlFor={key}>
-                        {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} 
-                        Duration ({isDevMode ? 'seconds' : 'minutes'})
-                      </Label>
-                      <Input
-                        id={key}
-                        type="number"
-                        min="1"
-                        max={isDevMode ? 300 : 60}
-                        value={value}
-                        onChange={(e) => {
-                          const newValue = parseInt(e.target.value);
-                          const maxValue = isDevMode ? 300 : 60;
-                          if (newValue > 0 && newValue <= maxValue) {
-                            const newSettings = { ...settings, [key]: newValue };
-                            setSettings(newSettings);
-                          }
-                        }}
-                      />
-                    </div>
-                  )
-                ))}
-                <Button 
-                  className="w-full mt-4"
-                  onClick={() => {
-                    setSettings(settings);
-                    setIsSettingsOpen(false);
-                  }}
-                >
-                  Save Settings
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <div className="flex justify-center space-x-4">
-                  {(['work', 'shortBreak', 'longBreak'] as TimerMode[]).map((timerMode) => (
-                    <Button
-                      key={timerMode}
-                      onClick={() => handleModeChange(timerMode)}
-                      variant={mode === timerMode ? "default" : "outline"}
-                    >
-                      {timerMode.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                    </Button>
-                  ))}
-                </div>
-
-                <div className="text-center">
-                  <div className={`text-6xl font-bold mb-8 rounded-lg p-8 ${
-                    mode === 'work' ? 'bg-red-500' :
-                    mode === 'shortBreak' ? 'bg-green-500' : 'bg-blue-500'
-                  } bg-opacity-10`}>
-                    {formatTime(timeLeft)}
-                  </div>
-
-                  <div className="space-x-4">
-                    <Button
-                      onClick={toggleTimer}
-                      variant="default"
-                      size="lg"
-                    >
-                      {isRunning ? 'Pause' : 'Start'}
-                    </Button>
-                    <Button
-                      onClick={resetTimer}
-                      variant="outline"
-                      size="lg"
-                    >
-                      Reset
-                    </Button>
-                  </div>
-
-                  <div className="mt-6 text-sm text-gray-600">
-                    Completed Pomodoros: {completedPomodoros}
-                  </div>
-                </div>
-              </div>
+        <div className="relative w-full max-w-md">
+          <motion.div
+            className={cn(
+              "w-full transition-all duration-300 ease-in-out",
+              isScrolled ? "sticky top-24" : "relative"
             )}
-          </CardContent>
-        </Card>
+            initial={false} // Prevent initial animation
+            animate={{ 
+              opacity: 1,
+              scale: isScrolled ? 0.95 : 1,
+            }}
+            transition={{
+              type: "spring",
+              stiffness: 100, // Reduced stiffness for smoother motion
+              damping: 30,    // Increased damping to reduce bounce
+              mass: 0.5       // Lighter mass for quicker response
+            }}
+          >
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-2xl font-bold">Pomodoro Timer</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsDevMode(!isDevMode)}
+                    className="text-xs"
+                  >
+                    {isDevMode ? '🐛 Dev' : '⏰ Normal'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                  >
+                    ⚙️ Settings
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {isSettingsOpen ? (
+                  <div className="space-y-4">
+                    {Object.entries(settings).map(([key, value]) => (
+                      key !== 'currentMode' && (
+                        <div key={key} className="flex flex-col space-y-2">
+                          <Label htmlFor={key}>
+                            {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} 
+                            Duration ({isDevMode ? 'seconds' : 'minutes'})
+                          </Label>
+                          <Input
+                            id={key}
+                            type="number"
+                            min="1"
+                            max={isDevMode ? 300 : 60}
+                            value={value}
+                            onChange={(e) => {
+                              const newValue = parseInt(e.target.value);
+                              const maxValue = isDevMode ? 300 : 60;
+                              if (newValue > 0 && newValue <= maxValue) {
+                                const newSettings = { ...settings, [key]: newValue };
+                                setSettings(newSettings);
+                              }
+                            }}
+                          />
+                        </div>
+                      )
+                    ))}
+                    <Button 
+                      className="w-full mt-4"
+                      onClick={() => {
+                        setSettings(settings);
+                        setIsSettingsOpen(false);
+                      }}
+                    >
+                      Save Settings
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="flex justify-center space-x-4">
+                      {(['work', 'shortBreak', 'longBreak'] as TimerMode[]).map((timerMode) => (
+                        <Button
+                          key={timerMode}
+                          onClick={() => handleModeChange(timerMode)}
+                          variant={mode === timerMode ? "default" : "outline"}
+                        >
+                          {timerMode.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                        </Button>
+                      ))}
+                    </div>
+
+                    <div className="text-center">
+                      <div className={`text-6xl font-bold mb-8 rounded-lg p-8 ${
+                        mode === 'work' ? 'bg-red-500' :
+                        mode === 'shortBreak' ? 'bg-green-500' : 'bg-blue-500'
+                      } bg-opacity-10`}>
+                        {formatTime(timeLeft)}
+                      </div>
+
+                      <div className="space-x-4">
+                        <Button
+                          onClick={toggleTimer}
+                          variant="default"
+                          size="lg"
+                        >
+                          {isRunning ? 'Pause' : 'Start'}
+                        </Button>
+                        <Button
+                          onClick={resetTimer}
+                          variant="outline"
+                          size="lg"
+                        >
+                          Reset
+                        </Button>
+                      </div>
+
+                      <div className="mt-6 text-sm text-gray-600">
+                        Completed Pomodoros: {completedPomodoros}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
 
         <div className="flex-1">
           <YouTubeAudioPlayer />
