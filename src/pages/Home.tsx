@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6,12 +6,13 @@ import { Label } from "@/components/ui/label";
 import { useUser } from "../lib/context/user";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { databases, DATABASE_ID, account } from "../lib/appwrite";
-import { ID, Permission, Role, Query } from "appwrite";
+import { ID, Query } from "appwrite";
 import { useTimer } from "@/lib/context/timer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronDown } from "lucide-react";
 import { Client } from "appwrite";
 import { StickerPicker } from "@/components/StickerPicker";
+import { useStickers } from '@/lib/hooks/useStickers';
 
 // Define interfaces
 type TimerMode = 'work' | 'shortBreak' | 'longBreak';
@@ -139,11 +140,10 @@ interface AppwriteMessage {
 function useChat(user: ReturnType<typeof useUser>, mode: TimerMode) {
   const [messages, setMessages] = useState<AppwriteMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
-  const [cursorPosition, setCursorPosition] = useState(0);
+  const [cursorPosition, setCursorPosition] = useState<number>(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isNearBottom, setIsNearBottom] = useState(true);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const [currentSticker, setCurrentSticker] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -183,6 +183,8 @@ function useChat(user: ReturnType<typeof useUser>, mode: TimerMode) {
   }, []);
 
   const insertSticker = useCallback((sticker: string) => {
+    if (cursorPosition === null) return;
+    
     const stickerText = `[sticker:${sticker}]`;
     const before = newMessage.slice(0, cursorPosition);
     const after = newMessage.slice(cursorPosition);
@@ -212,9 +214,7 @@ function useChat(user: ReturnType<typeof useUser>, mode: TimerMode) {
     if (!newMessage.trim() || !user.current) return;
 
     try {
-      // Check if message contains stickers and format content accordingly
       const content = newMessage.trim();
-      const hasStickers = content.includes('[sticker:');
       
       await databases.createDocument(
         DATABASE_ID,
@@ -273,7 +273,9 @@ function useChat(user: ReturnType<typeof useUser>, mode: TimerMode) {
     newMessage,
     setNewMessage,
     cursorPosition,
-    setCursorPosition,
+    setCursorPosition: (pos: number) => {
+      setCursorPosition(pos);
+    },
     showScrollButton,
     isNearBottom,
     scrollAreaRef,
@@ -281,7 +283,6 @@ function useChat(user: ReturnType<typeof useUser>, mode: TimerMode) {
     handleScroll,
     sendMessage,
     setShowScrollButton,
-    setCurrentSticker,
     insertSticker,
     handleInputChange,
     inputRef
@@ -366,6 +367,7 @@ function useSettings(user: ReturnType<typeof useUser>) {
 }
 
 const MessageContent = ({ content, isOwnMessage }: { content: string, isOwnMessage: boolean }) => {
+  const { getStickerUrl, getStickerId, isLoading } = useStickers();
   const parts = content.split(/(\[sticker:[^\]]+\])/);
   
   return (
@@ -376,12 +378,29 @@ const MessageContent = ({ content, isOwnMessage }: { content: string, isOwnMessa
         const stickerMatch = part.match(/\[sticker:([^\]]+)\]/);
         if (stickerMatch) {
           const stickerName = stickerMatch[1];
+          // Get the ID from the name
+          const stickerId = getStickerId(stickerName);
+          if (!stickerId) {
+            return (
+              <span 
+                key={index}
+                className="inline-block h-8 w-8 align-middle mx-1 bg-gray-100 rounded text-xs text-center leading-8"
+                title={isLoading ? "Loading sticker..." : `Sticker not found: ${stickerName}`}
+              >
+                {isLoading ? "⌛" : "❌"}
+              </span>
+            );
+          }
           return (
             <img 
               key={index}
-              src={`/learnwithleon/${stickerName}`}
-              alt="Sticker"
+              src={getStickerUrl(stickerId)}
+              alt={stickerName}
               className="inline-block h-8 w-8 align-middle mx-1"
+              onError={(e) => {
+                console.error(`Failed to load sticker: ${stickerName}`);
+                e.currentTarget.src = '/fallback-sticker.png';
+              }}
             />
           );
         }
@@ -396,6 +415,10 @@ export function Home() {
   const { mode } = useTimer();
   const [isDevMode, setIsDevMode] = useState(() => localStorage.getItem('devMode') === 'true');
   const [showCompletionDialog, setShowCompletionDialog] = useState(false);
+  const { getStickerUrl, stickers } = useStickers();
+  const [isNearBottom, setIsNearBottom] = useState(true);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const {
     settings,
@@ -421,6 +444,12 @@ export function Home() {
   const { handleModeChange, awardMicroLeons } = useModeTransition();
 
   const chat = useChat(user, mode);
+
+  // Find microLeon sticker ID
+  const microLeonSticker = useMemo(() => 
+    stickers.find(s => s.name === 'microLeon.png'),
+    [stickers]
+  );
 
   // Handle timer completion
   useEffect(() => {
@@ -658,7 +687,12 @@ export function Home() {
                 placeholder="Type your message... Use stickers with the picker!" 
                 value={chat.newMessage}
                 onChange={chat.handleInputChange}
-                onSelect={(e) => chat.setCursorPosition(e.currentTarget.selectionStart)}
+                onSelect={(e) => {
+                  const pos = e.currentTarget.selectionStart;
+                  if (pos !== null) {
+                    chat.setCursorPosition(pos);
+                  }
+                }}
                 className="flex-1"
               />
               <Button type="submit">
@@ -677,11 +711,13 @@ export function Home() {
               <div className="space-y-2">
                 <div>Great job! You've completed a work session.</div>
                 <div className="font-medium text-yellow-600 flex items-center gap-2">
-                  <img 
-                    src="/learnwithleon/microLeon.png" 
-                    alt="Micro Leon" 
-                    className="h-16 w-16"
-                  />
+                  {microLeonSticker && (
+                    <img 
+                      src={getStickerUrl(microLeonSticker.$id)}
+                      alt="Micro Leon" 
+                      className="h-16 w-16"
+                    />
+                  )}
                   You earned {completedPomodoros % settings.longBreakInterval === 0 ? '50' : '10'} micro leons!
                 </div>
               </div>

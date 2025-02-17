@@ -6,29 +6,28 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { account } from "@/lib/appwrite";
 import confetti from 'canvas-confetti';
 import { Lock } from "lucide-react";
+import { useStickers } from '@/lib/hooks/useStickers';
+import { uploadStickers } from '@/lib/uploadStickers';
 
 const BOOSTER_PACK_COST = 100;
-
-// Get all PNG files from the learnwithleon directory
-const stickerFiles = import.meta.glob('/public/learnwithleon/*.png', { 
-  as: 'url',
-  eager: true 
-});
-
-// Convert paths to filenames
-const STICKER_OPTIONS = Object.keys(stickerFiles)
-  .map(path => path.split('/').pop() || '')
-  .filter(filename => filename !== '');
 
 export function Store() {
   const user = useUser();
   const [isOpening, setIsOpening] = useState(false);
   const [showReward, setShowReward] = useState(false);
   const [currentSticker, setCurrentSticker] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   
   const microLeons = Number(user.current?.prefs.microLeons) || 0;
   const unlockedStickers = user.current?.prefs.unlockedStickers ? 
     JSON.parse(user.current.prefs.unlockedStickers) : [];
+
+  const { stickers, isLoading, getStickerUrl } = useStickers();
+
+  const microLeonSticker = useMemo(() => 
+    stickers.find(s => s.name === 'microLeon.png'),
+    [stickers]
+  );
 
   // Create a map to count sticker quantities
   const stickerCounts = useMemo(() => {
@@ -40,36 +39,33 @@ export function Store() {
   }, [unlockedStickers]);
 
   const openBoosterPack = useCallback(async () => {
-    if (!user.current || microLeons < BOOSTER_PACK_COST) return;
+    if (!user.current || microLeons < BOOSTER_PACK_COST || !stickers.length) return;
 
     setIsOpening(true);
     
     try {
       // Select a random sticker
-      const randomSticker = STICKER_OPTIONS[Math.floor(Math.random() * STICKER_OPTIONS.length)];
+      const randomSticker = stickers[Math.floor(Math.random() * stickers.length)];
       
       // Update user preferences
       const newMicroLeons = microLeons - BOOSTER_PACK_COST;
-      const newUnlockedStickers = [...unlockedStickers, randomSticker];
+      const newUnlockedStickers = [...unlockedStickers, randomSticker.$id];
       
       const updatedPrefs = {
         ...user.current.prefs,
         microLeons: newMicroLeons.toString(),
-        unlockedStickers: JSON.stringify([...new Set(newUnlockedStickers)])
+        unlockedStickers: JSON.stringify(newUnlockedStickers)
       };
       
       await account.updatePrefs(updatedPrefs);
-      
-      // Update local state
       user.updateUser({
         ...user.current,
         prefs: updatedPrefs
       });
       
-      setCurrentSticker(randomSticker);
+      setCurrentSticker(randomSticker.$id);
       setShowReward(true);
       
-      // Trigger confetti animation
       confetti({
         particleCount: 100,
         spread: 70,
@@ -80,13 +76,38 @@ export function Store() {
     } finally {
       setIsOpening(false);
     }
-  }, [user, microLeons, unlockedStickers]);
+  }, [user, microLeons, unlockedStickers, stickers]);
+
+  const handleUpload = async () => {
+    if (isUploading) return;
+    setIsUploading(true);
+    try {
+      await uploadStickers();
+    } catch (error) {
+      console.error('Upload failed:', error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  if (isLoading) {
+    return <div>Loading stickers...</div>;
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
       <Card className="w-full max-w-md mx-auto">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold">Sticker Store</CardTitle>
+          <div className="flex justify-between items-center">
+            <CardTitle className="text-2xl font-bold">Sticker Store</CardTitle>
+            <Button 
+              variant="outline" 
+              onClick={handleUpload}
+              disabled={isUploading}
+            >
+              {isUploading ? 'Uploading...' : 'Upload Stickers'}
+            </Button>
+          </div>
           <CardDescription>
             Unlock new stickers to show off in chat!
           </CardDescription>
@@ -95,11 +116,13 @@ export function Store() {
           <div className="space-y-6">
             <div className="flex items-center justify-between p-4 bg-gray-100 rounded-lg">
               <div className="flex items-center gap-2">
-                <img 
-                  src="/learnwithleon/microLeon.png" 
-                  alt="Micro Leon" 
-                  className="h-8 w-8"
-                />
+                {microLeonSticker && (
+                  <img 
+                    src={getStickerUrl(microLeonSticker.$id)}
+                    alt="Micro Leon" 
+                    className="h-8 w-8"
+                  />
+                )}
                 <span className="font-medium">{microLeons} micro leons</span>
               </div>
             </div>
@@ -110,11 +133,13 @@ export function Store() {
                 Contains one random sticker
               </p>
               <div className="flex items-center justify-center gap-2">
-                <img 
-                  src="/learnwithleon/microLeon.png" 
-                  alt="Cost" 
-                  className="h-6 w-6"
-                />
+                {microLeonSticker && (
+                  <img 
+                    src={getStickerUrl(microLeonSticker.$id)}
+                    alt="Cost" 
+                    className="h-6 w-6"
+                  />
+                )}
                 <span>{BOOSTER_PACK_COST}</span>
               </div>
               <Button
@@ -129,13 +154,13 @@ export function Store() {
             <div className="space-y-2">
               <h3 className="font-medium">Your Collection</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                {STICKER_OPTIONS.map((sticker) => {
-                  const count = stickerCounts[sticker] || 0;
+                {stickers.map((sticker) => {
+                  const count = stickerCounts[sticker.$id] || 0;
                   const isUnlocked = count > 0;
                   
                   return (
                     <div 
-                      key={sticker}
+                      key={sticker.$id}
                       className="flex flex-col items-center gap-2"
                     >
                       <div 
@@ -148,17 +173,13 @@ export function Store() {
                         `}
                       >
                         <img 
-                          src={`/learnwithleon/${sticker}`}
-                          alt={sticker.replace('.png', '')}
+                          src={getStickerUrl(sticker.$id)}
+                          alt={sticker.name}
                           className={`
                             w-full h-full object-contain
                             ${isUnlocked ? '' : 'opacity-30 grayscale'}
                             transition-all duration-200
                           `}
-                          onError={(e) => {
-                            console.error(`Failed to load sticker: ${sticker}`);
-                            e.currentTarget.src = '/learnwithleon/microLeon.png';
-                          }}
                         />
                         {!isUnlocked && (
                           <div className="absolute inset-0 flex items-center justify-center bg-black/5 rounded-lg">
@@ -175,7 +196,7 @@ export function Store() {
                         text-xs text-center truncate w-full
                         ${isUnlocked ? 'text-gray-700' : 'text-gray-400'}
                       `}>
-                        {sticker.replace('.png', '').split('-').join(' ')}
+                        {sticker.name.replace('.png', '').split('-').join(' ')}
                       </span>
                     </div>
                   );
@@ -208,7 +229,7 @@ export function Store() {
             <div className="flex flex-col items-center gap-4 py-4">
               <div className="w-32 h-32 flex items-center justify-center">
                 <img 
-                  src={`/learnwithleon/${currentSticker}`}
+                  src={getStickerUrl(currentSticker)}
                   alt="New Sticker"
                   className="w-full h-full object-contain"
                 />
