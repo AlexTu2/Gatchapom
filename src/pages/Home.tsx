@@ -16,6 +16,7 @@ import { storage } from '@/lib/appwrite';
 import * as audio from '@/lib/audio';
 import { useAudio } from "@/lib/context/audio";
 import { ID, Query, Client } from "appwrite";
+import { YouTubeAudioPlayer } from '@/components/YouTubeAudioPlayer';
 
 // Define interfaces
 type TimerMode = 'work' | 'shortBreak' | 'longBreak';
@@ -684,204 +685,210 @@ export function Home() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <Card className="w-full max-w-md mx-auto">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-2xl font-bold">Pomodoro Timer</CardTitle>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsDevMode(!isDevMode)}
-              className="text-xs"
-            >
-              {isDevMode ? '🐛 Dev' : '⏰ Normal'}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-            >
-              ⚙️ Settings
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isSettingsOpen ? (
-            <div className="space-y-4">
-              {Object.entries(settings).map(([key, value]) => (
-                key !== 'currentMode' && (
-                  <div key={key} className="flex flex-col space-y-2">
-                    <Label htmlFor={key}>
-                      {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} 
-                      Duration ({isDevMode ? 'seconds' : 'minutes'})
-                    </Label>
-                    <Input
-                      id={key}
-                      type="number"
-                      min="1"
-                      max={isDevMode ? 300 : 60}
-                      value={value}
-                      onChange={(e) => {
-                        const newValue = parseInt(e.target.value);
-                        const maxValue = isDevMode ? 300 : 60;
-                        if (newValue > 0 && newValue <= maxValue) {
-                          const newSettings = { ...settings, [key]: newValue };
-                          setSettings(newSettings);
-                        }
-                      }}
-                    />
-                  </div>
-                )
-              ))}
-              <Button 
-                className="w-full mt-4"
-                onClick={() => {
-                  setSettings(settings);
-                  setIsSettingsOpen(false);
-                }}
+      <div className="flex gap-8">
+        <Card className="w-full max-w-md">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-2xl font-bold">Pomodoro Timer</CardTitle>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsDevMode(!isDevMode)}
+                className="text-xs"
               >
-                Save Settings
+                {isDevMode ? '🐛 Dev' : '⏰ Normal'}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              >
+                ⚙️ Settings
               </Button>
             </div>
-          ) : (
-            <div className="space-y-6">
-              <div className="flex justify-center space-x-4">
-                {(['work', 'shortBreak', 'longBreak'] as TimerMode[]).map((timerMode) => (
-                  <Button
-                    key={timerMode}
-                    onClick={() => handleModeChange(timerMode)}
-                    variant={mode === timerMode ? "default" : "outline"}
-                  >
-                    {timerMode.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                  </Button>
-                ))}
-              </div>
-
-              <div className="text-center">
-                <div className={`text-6xl font-bold mb-8 rounded-lg p-8 ${
-                  mode === 'work' ? 'bg-red-500' :
-                  mode === 'shortBreak' ? 'bg-green-500' : 'bg-blue-500'
-                } bg-opacity-10`}>
-                  {formatTime(timeLeft)}
-                </div>
-
-                <div className="space-x-4">
-                  <Button
-                    onClick={toggleTimer}
-                    variant="default"
-                    size="lg"
-                  >
-                    {isRunning ? 'Pause' : 'Start'}
-                  </Button>
-                  <Button
-                    onClick={resetTimer}
-                    variant="outline"
-                    size="lg"
-                  >
-                    Reset
-                  </Button>
-                </div>
-
-                <div className="mt-6 text-sm text-gray-600">
-                  Completed Pomodoros: {completedPomodoros}
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Chat Section - Only show during breaks */}
-      {(mode === 'shortBreak' || mode === 'longBreak') && (
-        <Card className="mt-8">
-          <CardHeader>
-            <CardTitle className="text-2xl font-bold">Chat Room</CardTitle>
           </CardHeader>
-          <CardContent className="relative">
-            <ScrollArea 
-              className="h-[500px] pr-4 mb-4"
-              ref={chat.scrollAreaRef}
-              onScrollCapture={chat.handleScroll}
-            >
+          <CardContent>
+            {isSettingsOpen ? (
               <div className="space-y-4">
-                {chat.messages.map((message) => (
-                  <div 
-                    key={message.$id}
-                    className={`flex items-start gap-3 ${
-                      message.userId === user.current?.$id ? 'flex-row-reverse' : ''
-                    }`}
-                  >
-                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
-                      {message.userAvatar ? (
-                        <img 
-                          src={message.userAvatar} 
-                          alt={message.userName}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-sm font-medium">
-                          {message.userName.charAt(0).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    <div className={`max-w-[70%] ${
-                      message.userId === user.current?.$id ? 'text-right' : ''
-                    }`}>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold">{message.userName}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {formatTime(new Date(message.createdAt).getTime() / 1000, true)}
-                        </span>
-                      </div>
-                      <MessageContent 
-                        content={message.content} 
-                        isOwnMessage={message.userId === user.current?.$id}
+                {Object.entries(settings).map(([key, value]) => (
+                  key !== 'currentMode' && (
+                    <div key={key} className="flex flex-col space-y-2">
+                      <Label htmlFor={key}>
+                        {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} 
+                        Duration ({isDevMode ? 'seconds' : 'minutes'})
+                      </Label>
+                      <Input
+                        id={key}
+                        type="number"
+                        min="1"
+                        max={isDevMode ? 300 : 60}
+                        value={value}
+                        onChange={(e) => {
+                          const newValue = parseInt(e.target.value);
+                          const maxValue = isDevMode ? 300 : 60;
+                          if (newValue > 0 && newValue <= maxValue) {
+                            const newSettings = { ...settings, [key]: newValue };
+                            setSettings(newSettings);
+                          }
+                        }}
                       />
                     </div>
-                  </div>
+                  )
                 ))}
+                <Button 
+                  className="w-full mt-4"
+                  onClick={() => {
+                    setSettings(settings);
+                    setIsSettingsOpen(false);
+                  }}
+                >
+                  Save Settings
+                </Button>
               </div>
-            </ScrollArea>
+            ) : (
+              <div className="space-y-6">
+                <div className="flex justify-center space-x-4">
+                  {(['work', 'shortBreak', 'longBreak'] as TimerMode[]).map((timerMode) => (
+                    <Button
+                      key={timerMode}
+                      onClick={() => handleModeChange(timerMode)}
+                      variant={mode === timerMode ? "default" : "outline"}
+                    >
+                      {timerMode.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                    </Button>
+                  ))}
+                </div>
 
-            {chat.showScrollButton && !chat.isNearBottom && (
-              <Button
-                size="icon"
-                variant="secondary"
-                className="absolute bottom-16 right-8 rounded-full w-8 h-8 shadow-md"
-                onClick={() => {
-                  chat.scrollToBottom();
-                  chat.setShowScrollButton(false);
-                }}
-              >
-                <ChevronDown className="h-4 w-4" />
-              </Button>
+                <div className="text-center">
+                  <div className={`text-6xl font-bold mb-8 rounded-lg p-8 ${
+                    mode === 'work' ? 'bg-red-500' :
+                    mode === 'shortBreak' ? 'bg-green-500' : 'bg-blue-500'
+                  } bg-opacity-10`}>
+                    {formatTime(timeLeft)}
+                  </div>
+
+                  <div className="space-x-4">
+                    <Button
+                      onClick={toggleTimer}
+                      variant="default"
+                      size="lg"
+                    >
+                      {isRunning ? 'Pause' : 'Start'}
+                    </Button>
+                    <Button
+                      onClick={resetTimer}
+                      variant="outline"
+                      size="lg"
+                    >
+                      Reset
+                    </Button>
+                  </div>
+
+                  <div className="mt-6 text-sm text-gray-600">
+                    Completed Pomodoros: {completedPomodoros}
+                  </div>
+                </div>
+              </div>
             )}
-
-            <form onSubmit={chat.sendMessage} className="flex items-center gap-2">
-              <StickerPicker 
-                unlockedStickers={parsedUnlockedStickers}
-                onStickerSelect={chat.insertSticker}
-              />
-              <Input 
-                ref={chat.inputRef}
-                placeholder="Type your message... Use stickers with the picker!" 
-                value={chat.newMessage}
-                onChange={chat.handleInputChange}
-                onSelect={(e) => {
-                  const pos = e.currentTarget.selectionStart;
-                  if (pos !== null) {
-                    chat.setCursorPosition(pos);
-                  }
-                }}
-                className="flex-1"
-              />
-              <Button type="submit">
-                Send
-              </Button>
-            </form>
           </CardContent>
         </Card>
-      )}
+
+        <div className="flex-1">
+          <YouTubeAudioPlayer />
+          
+          {/* Move chat below the player when in break mode */}
+          {(mode === 'shortBreak' || mode === 'longBreak') && (
+            <Card className="mt-8">
+              <CardHeader>
+                <CardTitle className="text-2xl font-bold">Chat Room</CardTitle>
+              </CardHeader>
+              <CardContent className="relative">
+                <ScrollArea 
+                  className="h-[500px] pr-4 mb-4"
+                  ref={chat.scrollAreaRef}
+                  onScrollCapture={chat.handleScroll}
+                >
+                  <div className="space-y-4">
+                    {chat.messages.map((message) => (
+                      <div 
+                        key={message.$id}
+                        className={`flex items-start gap-3 ${
+                          message.userId === user.current?.$id ? 'flex-row-reverse' : ''
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+                          {message.userAvatar ? (
+                            <img 
+                              src={message.userAvatar} 
+                              alt={message.userName}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-sm font-medium">
+                              {message.userName.charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <div className={`max-w-[70%] ${
+                          message.userId === user.current?.$id ? 'text-right' : ''
+                        }`}>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">{message.userName}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatTime(new Date(message.createdAt).getTime() / 1000, true)}
+                            </span>
+                          </div>
+                          <MessageContent 
+                            content={message.content} 
+                            isOwnMessage={message.userId === user.current?.$id}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+
+                {chat.showScrollButton && !chat.isNearBottom && (
+                  <Button
+                    size="icon"
+                    variant="secondary"
+                    className="absolute bottom-16 right-8 rounded-full w-8 h-8 shadow-md"
+                    onClick={() => {
+                      chat.scrollToBottom();
+                      chat.setShowScrollButton(false);
+                    }}
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                )}
+
+                <form onSubmit={chat.sendMessage} className="flex items-center gap-2">
+                  <StickerPicker 
+                    unlockedStickers={parsedUnlockedStickers}
+                    onStickerSelect={chat.insertSticker}
+                  />
+                  <Input 
+                    ref={chat.inputRef}
+                    placeholder="Type your message... Use stickers with the picker!" 
+                    value={chat.newMessage}
+                    onChange={chat.handleInputChange}
+                    onSelect={(e) => {
+                      const pos = e.currentTarget.selectionStart;
+                      if (pos !== null) {
+                        chat.setCursorPosition(pos);
+                      }
+                    }}
+                    className="flex-1"
+                  />
+                  <Button type="submit">
+                    Send
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
 
       <Dialog open={showCompletionDialog} onOpenChange={setShowCompletionDialog}>
         <DialogContent>
