@@ -42,3 +42,7 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+
+
+.git.bak
+secret
