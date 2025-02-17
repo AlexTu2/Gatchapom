@@ -1,19 +1,25 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useUser } from "@/lib/context/user";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { account } from "@/lib/appwrite";
+import { account, storage } from "@/lib/appwrite";
 import confetti from 'canvas-confetti';
 import { Lock } from "lucide-react";
 import { useStickers } from '@/lib/hooks/useStickers';
 import { uploadStickers } from '@/lib/uploadStickers';
 import { toast } from "@/components/ui/use-toast";
 import { Models } from "appwrite";
+import { AUDIO_BUCKET_ID } from "@/lib/audio";
+import { STICKER_SOUND_MAP } from "@/config/stickerSounds";
 
 const BOOSTER_PACK_COST = 100;
 const STICKER_PRICE = 100; // Assuming a default STICKER_PRICE
 const MAX_PACKS = 10;
+
+interface StickerSounds {
+  [key: string]: HTMLAudioElement;
+}
 
 export function Store() {
   const user = useUser();
@@ -27,6 +33,45 @@ export function Store() {
   
   const microLeons = Number(user.current?.prefs.microLeons) || 0;
   const { stickers, isLoading, getStickerUrl } = useStickers();
+
+  const stickerSounds = useRef<StickerSounds>({});
+  const [soundsLoaded, setSoundsLoaded] = useState(false);
+
+  useEffect(() => {
+    const loadStickerSounds = async () => {
+      if (soundsLoaded) return;
+
+      try {
+        for (const [stickerName, soundFile] of Object.entries(STICKER_SOUND_MAP)) {
+          try {
+            const soundUrl = storage.getFileView(AUDIO_BUCKET_ID, soundFile);
+            const audio = new Audio(soundUrl.toString());
+            
+            stickerSounds.current[stickerName] = audio;
+            
+            await audio.load();
+          } catch (error) {
+            console.error(`Failed to load sound for ${stickerName}:`, error);
+          }
+        }
+        setSoundsLoaded(true);
+      } catch (error) {
+        console.error('Error loading sticker sounds:', error);
+      }
+    };
+
+    loadStickerSounds();
+  }, [soundsLoaded]);
+
+  const playStickerSound = useCallback((stickerName: string) => {
+    const audio = stickerSounds.current[stickerName];
+    if (audio) {
+      audio.currentTime = 0;
+      audio.play().catch(error => {
+        console.error('Error playing sticker sound:', error);
+      });
+    }
+  }, []);
 
   // Parse unlocked stickers first
   const unlockedStickers = useMemo(() => {
@@ -77,6 +122,11 @@ export function Store() {
         // Update the sticker count
         const stickerName = randomSticker.name;
         updatedStickers[stickerName] = (updatedStickers[stickerName] || 0) + 1;
+        
+        // Play sound if it's a new sticker (count was 0 before)
+        if (!unlockedStickers[stickerName] && STICKER_SOUND_MAP[stickerName]) {
+          playStickerSound(stickerName);
+        }
       }
 
       // Update user preferences
@@ -102,7 +152,7 @@ export function Store() {
     } finally {
       setIsOpening(false);
     }
-  }, [user, microLeons, stickers, unlockedStickers, packCount]);
+  }, [user, microLeons, stickers, unlockedStickers, packCount, playStickerSound]);
 
   const handleUpload = async () => {
     if (isUploading) return;
@@ -254,6 +304,12 @@ export function Store() {
                     <div 
                       key={sticker.$id}
                       className="flex flex-col items-center gap-2"
+                      onClick={() => {
+                        if (isUnlocked && STICKER_SOUND_MAP[sticker.name]) {
+                          playStickerSound(sticker.name);
+                        }
+                      }}
+                      style={{ cursor: isUnlocked && STICKER_SOUND_MAP[sticker.name] ? 'pointer' : 'default' }}
                     >
                       <div 
                         className={`
