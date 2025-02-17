@@ -99,14 +99,9 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   // Update mode and save to settings
   const handleModeChange = async (newMode: TimerMode) => {
     try {
-      // Get fresh user data to avoid overwriting other fields
-      const currentUser = await account.get();
-      const currentPrefs = currentUser.prefs;
-      
       // Only update the timerSettings field
       const newSettings = { ...settings, currentMode: newMode };
       await user.updateUser({
-        ...currentPrefs, // Keep all existing preferences
         timerSettings: JSON.stringify(newSettings)
       });
       

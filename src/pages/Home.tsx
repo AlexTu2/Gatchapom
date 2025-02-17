@@ -102,41 +102,18 @@ function useModeTransition() {
       const currentLeons = Number(currentUser.prefs.microLeons) || 0;
       const newLeons = currentLeons + amount;
       
-      console.log('Before update:', {
-        currentLeons,
-        newLeons,
-        amount,
-        currentPrefs: currentUser.prefs
-      });
-
-      // Update using the clean updateUser function with only the microLeons field
+      // Update only the microLeons field
       await user.updateUser({
-        ...currentUser.prefs,
         microLeons: newLeons.toString()
       });
 
       // Verify the update
       const verifyUser = await account.get();
-      console.log('After update:', {
-        verifiedLeons: Number(verifyUser.prefs.microLeons),
-        expectedLeons: newLeons,
-        verifyPrefs: verifyUser.prefs
+      console.log('MicroLeons update:', {
+        before: currentLeons,
+        awarded: amount,
+        after: Number(verifyUser.prefs.microLeons)
       });
-
-      if (Number(verifyUser.prefs.microLeons) !== newLeons) {
-        console.error('Micro leon update failed - retrying');
-        await user.updateUser({
-          ...verifyUser.prefs,
-          microLeons: newLeons.toString()
-        });
-
-        const finalCheck = await account.get();
-        console.log('After retry:', {
-          finalLeons: Number(finalCheck.prefs.microLeons),
-          expectedLeons: newLeons,
-          finalPrefs: finalCheck.prefs
-        });
-      }
 
     } catch (error) {
       console.error('Error awarding micro leons:', error);
@@ -523,49 +500,46 @@ export function Home() {
   // Add a ref to track if we're currently processing a completion
   const isProcessingCompletion = useRef(false);
 
-  // Update the timer completion effect
+  // Timer completion effect
   useEffect(() => {
-    if (timeLeft === 0 && !showCompletionDialog && !isProcessingCompletion.current) {
-      isProcessingCompletion.current = true;  // Set processing flag
-      
-      alarmSound.current.currentTime = 0;
-      alarmSound.current.play();
-      
-      setTimeout(() => {
-        alarmSound.current.pause();
-        alarmSound.current.currentTime = 0;
-      }, 500);
+    if (timeLeft === 0 && isRunning) {
+      if (isProcessingCompletion.current) return;
+      isProcessingCompletion.current = true;
 
-      if (mode === 'work') {
-        const newCompletedPomodoros = completedPomodoros + 1;
-        setCompletedPomodoros(newCompletedPomodoros);
-        setShowCompletionDialog(true);
-      } else {
-        handleModeChange('work');
-        setTimeLeft(settings.work * (isDevMode ? 1 : 60));
-        setIsRunning(false);
-      }
-      
-      // Reset processing flag after a short delay
-      setTimeout(() => {
-        isProcessingCompletion.current = false;
-      }, 100);
+      const handleCompletion = async () => {
+        try {
+          if (mode === 'work') {
+            const newCompletedPomodoros = completedPomodoros + 1;
+            // Award micro leons immediately
+            const reward = newCompletedPomodoros % settings.longBreakInterval === 0 ? 50 : 10;
+            await awardMicroLeons(reward);
+            
+            setCompletedPomodoros(newCompletedPomodoros);
+            setShowCompletionDialog(true);
+          } else {
+            handleModeChange('work');
+            setTimeLeft(settings.work * (isDevMode ? 1 : 60));
+            setIsRunning(false);
+          }
+        } finally {
+          // Reset processing flag after a short delay
+          setTimeout(() => {
+            isProcessingCompletion.current = false;
+          }, 100);
+        }
+      };
+
+      handleCompletion();
     }
-  }, [timeLeft, mode, completedPomodoros, settings, isDevMode, showCompletionDialog, handleModeChange, setTimeLeft, setIsRunning]);
+  }, [timeLeft, mode, completedPomodoros, settings, isDevMode, showCompletionDialog, handleModeChange, setTimeLeft, setIsRunning, awardMicroLeons]);
 
-  // Update handleCompletionDismiss to reset the processing flag
+  // Simplified handleCompletionDismiss
   const handleCompletionDismiss = useCallback(async () => {
-    if (isProcessingCompletion.current) return; // Prevent multiple executions
-    
-    setShowCompletionDialog(false);
+    if (isProcessingCompletion.current) return;
     isProcessingCompletion.current = true;
     
     try {
-      // Award micro leons based on completion count
-      const reward = completedPomodoros % settings.longBreakInterval === 0 ? 50 : 10;
-      await awardMicroLeons(reward);
-      
-      // Reset only after micro leons are awarded
+      setShowCompletionDialog(false);
       if (mode === 'work') {
         const nextMode = completedPomodoros % settings.longBreakInterval === 0 ? 'longBreak' : 'shortBreak';
         handleModeChange(nextMode);
@@ -575,7 +549,7 @@ export function Home() {
     } finally {
       isProcessingCompletion.current = false;
     }
-  }, [completedPomodoros, settings, mode, isDevMode, handleModeChange, awardMicroLeons, setTimeLeft, setIsRunning]);
+  }, [completedPomodoros, settings, mode, isDevMode, handleModeChange, setTimeLeft, setIsRunning]);
 
   const formatTime = useCallback((seconds: number, isMessageTime?: boolean): string => {
     if (isMessageTime) {

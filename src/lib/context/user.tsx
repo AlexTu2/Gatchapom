@@ -130,16 +130,23 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const updatedPrefs = await account.updatePrefs({
-        ...user.prefs,
+      // Get fresh user data first
+      const currentUser = await account.get();
+      
+      // Merge existing preferences with avatar updates
+      const updatedPrefs = {
+        ...currentUser.prefs,
         avatarId: fileId,
         avatarUrl: fileId ? storage.getFileView(BUCKET_ID, fileId).toString() : undefined
-      });
-      const typedPrefs = updatedPrefs as unknown as UserPrefs;
-      setUser({ ...user, prefs: typedPrefs });
+      };
+
+      await account.updatePrefs(updatedPrefs);
+      const freshUser = await account.get();
+      setUser(freshUser);
+      
       return {
-        avatarId: typedPrefs.avatarId,
-        avatarUrl: typedPrefs.avatarUrl
+        avatarId: freshUser.prefs.avatarId,
+        avatarUrl: freshUser.prefs.avatarUrl
       };
     } catch (error) {
       console.error('Update avatar error:', error);
@@ -204,35 +211,24 @@ export function UserProvider({ children }: { children: ReactNode }) {
     try {
       if (!user) throw new Error('No user logged in');
 
-      console.log('UpdateUser called with:', {
-        currentUser: user,
-        updates,
-        currentPrefs: user.prefs
-      });
-
-      // Get current prefs
-      const currentPrefs = user.prefs;
+      // Get fresh user data first
+      const currentUser = await account.get();
       
-      // Create clean updates object with only allowed fields
-      const cleanUpdates: Partial<Models.Preferences> = { ...currentPrefs };
-      
-      // Only update fields that are actually provided in updates
-      Object.keys(updates).forEach(key => {
-        if (key in updates) {
-          cleanUpdates[key] = updates[key];
-        }
-      });
+      // Merge existing preferences with updates
+      const mergedPrefs = {
+        ...currentUser.prefs, // Keep all existing preferences
+        ...updates // Apply our updates
+      };
 
-      console.log('Clean updates:', cleanUpdates);
-
-      // Update preferences with clean data
-      await account.updatePrefs(cleanUpdates);
+      // Update preferences with merged object
+      await account.updatePrefs(mergedPrefs);
       
-      // Get fresh user data
+      // Get fresh user data after update
       const freshUser = await account.get();
-      console.log('Fresh user after update:', {
-        freshUser,
-        freshPrefs: freshUser.prefs
+      console.log('User preferences updated:', {
+        before: currentUser.prefs,
+        updates,
+        after: freshUser.prefs
       });
 
       setUser(freshUser);

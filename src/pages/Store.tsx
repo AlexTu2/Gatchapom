@@ -8,8 +8,11 @@ import confetti from 'canvas-confetti';
 import { Lock } from "lucide-react";
 import { useStickers } from '@/lib/hooks/useStickers';
 import { uploadStickers } from '@/lib/uploadStickers';
+import { toast } from "@/components/ui/use-toast";
+import { Models } from "appwrite";
 
 const BOOSTER_PACK_COST = 100;
+const STICKER_PRICE = 100; // Assuming a default STICKER_PRICE
 
 export function Store() {
   const user = useUser();
@@ -72,19 +75,10 @@ export function Store() {
         [stickerName]: (unlockedStickers[stickerName] || 0) + 1
       };
 
-      const updatedPrefs = {
-        ...user.current.prefs,
+      // Only update the specific fields we need to change
+      await user.updateUser({
         microLeons: updatedMicroLeons.toString(),
         unlockedStickers: JSON.stringify(updatedStickers)
-      };
-
-      // Update Appwrite
-      await account.updatePrefs(updatedPrefs);
-
-      // Update local user context
-      user.updateUser({
-        ...user.current,
-        prefs: updatedPrefs
       });
 
       setCurrentSticker(randomSticker.$id);
@@ -123,6 +117,46 @@ export function Store() {
     setTimeout(() => {
       setJustUnlocked(null);
     }, 1000); // Shorter duration since user has already seen it
+  };
+
+  const purchaseSticker = async (sticker: Models.File) => {
+    if (!user.current) return;
+
+    try {
+      // Get fresh user data
+      const currentUser = await account.get();
+      
+      // Parse current microLeons and unlockedStickers
+      const currentLeons = Number(currentUser.prefs.microLeons) || 0;
+      let unlockedStickers;
+      try {
+        unlockedStickers = JSON.parse(currentUser.prefs.unlockedStickers || '{}');
+      } catch {
+        unlockedStickers = {};
+      }
+
+      // Check if user can afford the sticker
+      if (currentLeons < STICKER_PRICE) {
+        alert("Not enough micro leons! You need " + STICKER_PRICE + " micro leons to purchase this sticker.");
+        return;
+      }
+
+      // Update sticker count
+      const stickerName = sticker.name;
+      unlockedStickers[stickerName] = (unlockedStickers[stickerName] || 0) + 1;
+
+      // Update user preferences with new values
+      await user.updateUser({
+        microLeons: (currentLeons - STICKER_PRICE).toString(),
+        unlockedStickers: JSON.stringify(unlockedStickers)
+      });
+
+      alert("Sticker purchased! You can now use this sticker in chat.");
+
+    } catch (error) {
+      console.error('Error purchasing sticker:', error);
+      alert("Purchase failed. There was an error purchasing the sticker.");
+    }
   };
 
   if (isLoading) {
