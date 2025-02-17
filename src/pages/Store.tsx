@@ -17,6 +17,7 @@ export function Store() {
   const [showReward, setShowReward] = useState(false);
   const [currentSticker, setCurrentSticker] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [justUnlocked, setJustUnlocked] = useState<string | null>(null);
   
   const microLeons = Number(user.current?.prefs.microLeons) || 0;
   const { stickers, isLoading, getStickerUrl } = useStickers();
@@ -87,8 +88,9 @@ export function Store() {
       });
 
       setCurrentSticker(randomSticker.$id);
+      setJustUnlocked(randomSticker.$id);
       setShowReward(true);
-      
+
       // Trigger confetti effect
       confetti({
         particleCount: 100,
@@ -112,6 +114,15 @@ export function Store() {
     } finally {
       setIsUploading(false);
     }
+  };
+
+  // Handle dialog close
+  const handleRewardClose = () => {
+    setShowReward(false);
+    // Start the fade out after dialog is closed
+    setTimeout(() => {
+      setJustUnlocked(null);
+    }, 1000); // Shorter duration since user has already seen it
   };
 
   if (isLoading) {
@@ -189,10 +200,15 @@ export function Store() {
                     >
                       <div 
                         className={`
-                          aspect-square rounded-lg border p-2 
+                          aspect-square rounded-lg p-2 
                           flex items-center justify-center
-                          ${isUnlocked ? 'bg-white' : 'bg-gray-100'}
-                          transition-all duration-200
+                          ${isUnlocked 
+                            ? justUnlocked === sticker.$id
+                              ? 'bg-background border-2 border-yellow-400/50 shadow-[0_0_10px_rgba(250,204,21,0.3)] dark:shadow-[0_0_15px_rgba(250,204,21,0.2)]'
+                              : 'bg-background border-2 border-primary/50'
+                            : 'bg-muted border border-border'
+                          }
+                          transition-colors duration-300
                           relative
                         `}
                       >
@@ -201,17 +217,20 @@ export function Store() {
                           alt={sticker.name}
                           className={`
                             w-full h-full object-contain
-                            ${isUnlocked ? '' : 'opacity-30 grayscale'}
-                            transition-all duration-200
+                            ${isUnlocked 
+                              ? 'opacity-100' 
+                              : 'opacity-30 grayscale'
+                            }
+                            transition-opacity duration-300
                           `}
                         />
                         {!isUnlocked && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/5 rounded-lg">
-                            <Lock className="w-4 h-4 text-gray-400" />
+                          <div className="absolute inset-0 flex items-center justify-center bg-background/5 rounded-lg">
+                            <Lock className="w-4 h-4 text-muted-foreground" />
                           </div>
                         )}
                         {count > 1 && (
-                          <div className="absolute top-1 right-1 bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium">
+                          <div className="absolute top-1 right-1 bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium">
                             {count}
                           </div>
                         )}
@@ -231,7 +250,7 @@ export function Store() {
         </CardContent>
       </Card>
 
-      <Dialog open={showReward} onOpenChange={setShowReward}>
+      <Dialog open={showReward} onOpenChange={handleRewardClose}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>New Sticker Unlocked! 🎉</DialogTitle>
@@ -271,7 +290,7 @@ export function Store() {
             </div>
           )}
           <div className="flex justify-end">
-            <Button onClick={() => setShowReward(false)}>
+            <Button onClick={handleRewardClose}>
               Nice!
             </Button>
           </div>
