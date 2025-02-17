@@ -1,5 +1,5 @@
 import { storage } from '../appwrite';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Models } from 'appwrite';
 import { STICKERS_BUCKET_ID } from '../uploadStickers';
 
@@ -8,71 +8,66 @@ interface StickerMap {
 }
 
 export function useStickers() {
+  const [nameToId, setNameToId] = useState<Record<string, string>>({});
+  const [idToName, setIdToName] = useState<Record<string, string>>({});
   const [stickers, setStickers] = useState<Models.File[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [stickerNameToId, setStickerNameToId] = useState<StickerMap>({});
-  const [stickerIdToName, setStickerIdToName] = useState<StickerMap>({});
-  const [error, setError] = useState<string | null>(null);
+  const loadedRef = useRef(false);
+  const loggedRef = useRef(false); // New ref to track if we've logged
 
   useEffect(() => {
-    let mounted = true;
-    const controller = new AbortController();
-
+    if (loadedRef.current) return;
+    
     async function loadStickers() {
       try {
         const response = await storage.listFiles(STICKERS_BUCKET_ID);
-        
-        if (!mounted) return;
+        const stickerFiles = response.files.filter(file => 
+          file.name.endsWith('.png') || file.name.endsWith('.gif')
+        );
 
-        const nameToId: StickerMap = {};
-        const idToName: StickerMap = {};
-        
-        response.files.forEach(file => {
-          const fullName = file.name;
-          const baseName = file.name.replace('.png', '');
-          
-          // Store only the base name and full name
-          nameToId[fullName] = file.$id;
-          nameToId[baseName] = file.$id;
-          
-          // Store the base name for ID lookup
-          idToName[file.$id] = baseName;
+        const newNameToId: Record<string, string> = {};
+        const newIdToName: Record<string, string> = {};
+
+        stickerFiles.forEach(file => {
+          const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+          newNameToId[file.name] = file.$id;
+          newNameToId[nameWithoutExt] = file.$id;
+          newIdToName[file.$id] = nameWithoutExt;
         });
 
-        setStickers(response.files);
-        setStickerNameToId(nameToId);
-        setStickerIdToName(idToName);
-        setError(null);
-      } catch (error) {
-        if (!mounted) return;
-        console.error('Failed to load stickers:', error);
-        setError('Failed to load stickers');
-      } finally {
-        if (mounted) {
-          setIsLoading(false);
+        setNameToId(newNameToId);
+        setIdToName(newIdToName);
+        setStickers(stickerFiles);
+        
+        // Log only once in development
+        if (process.env.NODE_ENV === 'development' && !loggedRef.current) {
+          console.debug('Sticker mappings loaded:', {
+            count: stickerFiles.length,
+            stickers: stickerFiles.map(s => s.name)
+          });
+          loggedRef.current = true;
         }
+
+      } catch (error) {
+        console.error('Error loading stickers:', error);
+      } finally {
+        setIsLoading(false);
+        loadedRef.current = true;
       }
     }
 
     loadStickers();
-
-    return () => {
-      mounted = false;
-      controller.abort();
-    };
   }, []);
 
   const getStickerId = (name: string) => {
     if (isLoading) return undefined;
-
-    // Try both with and without .png
     const baseName = name.replace('.png', '');
-    return stickerNameToId[name] || stickerNameToId[baseName];
+    return nameToId[name] || nameToId[baseName];
   };
 
   const getStickerUrl = (nameOrId: string) => {
     try {
-      const fileId = stickerNameToId[nameOrId] || nameOrId;
+      const fileId = nameToId[nameOrId] || nameOrId;
       return storage.getFileView(STICKERS_BUCKET_ID, fileId);
     } catch (error) {
       console.error('Failed to get sticker URL');
@@ -81,14 +76,7 @@ export function useStickers() {
   };
 
   const getStickerName = (fileId: string) => {
-    return stickerIdToName[fileId];
-  };
-
-  // Debug function to check mappings
-  const debugMappings = () => {
-    console.log('Name to ID mappings:', stickerNameToId);
-    console.log('ID to Name mappings:', stickerIdToName);
-    console.log('All stickers:', stickers);
+    return idToName[fileId];
   };
 
   return {
@@ -96,8 +84,6 @@ export function useStickers() {
     isLoading,
     getStickerUrl,
     getStickerName,
-    getStickerId,
-    error,
-    debugMappings
+    getStickerId
   };
 } 

@@ -3,7 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Smile } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useStickers } from '@/lib/hooks/useStickers';
-import { useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 
 interface StickerPickerProps {
   unlockedStickers: { [key: string]: number };  // Changed from string[] to dictionary
@@ -11,18 +11,13 @@ interface StickerPickerProps {
 }
 
 export function StickerPicker({ unlockedStickers, onStickerSelect }: StickerPickerProps) {
-  const { stickers, isLoading, getStickerUrl, getStickerName, debugMappings } = useStickers();
+  const { stickers, isLoading, getStickerUrl } = useStickers();
 
   // Filter stickers that have a count > 0
   const unlockedStickerFiles = useMemo(() => 
     stickers.filter(s => (unlockedStickers[s.name] || 0) > 0),
     [stickers, unlockedStickers]
   );
-
-  // Add this useEffect for debugging
-  useEffect(() => {
-    debugMappings();
-  }, [debugMappings]);
 
   return (
     <Popover>
