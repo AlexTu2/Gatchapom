@@ -227,8 +227,12 @@ function useChat(
         for (const match of stickerMatches) {
           const stickerName = match.replace(/:/g, '') + '.png';
           if (!(unlockedStickers[stickerName] > 0)) {
-            console.log(`Sticker not unlocked: ${stickerName}`);
-            return; // Don't send the message if user doesn't have all stickers
+            // Show error message in the input
+            setNewMessage(`You haven't unlocked the ${stickerName} sticker yet! Visit the store to unlock it.`);
+            if (inputRef.current) {
+              inputRef.current.select(); // Select the text so user can easily delete it
+            }
+            return;
           }
         }
       }
