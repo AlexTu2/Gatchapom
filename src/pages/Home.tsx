@@ -284,54 +284,50 @@ function useChat(
     }
   }, [newMessage, user.current, unlockedStickers]);
 
-  // Load messages when entering break mode
+  // Move WebSocket setup to a top-level useEffect
   useEffect(() => {
     let wsClient: Client | null = null;
     let unsubscribe: (() => void) | null = null;
 
-    if (mode === 'shortBreak' || mode === 'longBreak') {
-      loadMessages();
-      
-      // Create new client
-      wsClient = new Client()
-        .setEndpoint('https://cloud.appwrite.io/v1')
-        .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
-      
-      try {
-        // Subscribe with error handling
-        unsubscribe = wsClient.subscribe([
-          `databases.${DATABASE_ID}.collections.messages.documents`
-        ], response => {
-          if (response.events.includes('databases.*.collections.*.documents.*.create')) {
-            const newMessage = response.payload as AppwriteMessage;
-            setMessages(prev => [...prev, newMessage]);
-          }
-        });
+    // Create WebSocket connection immediately
+    wsClient = new Client()
+      .setEndpoint('https://cloud.appwrite.io/v1')
+      .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
+    
+    try {
+      // Subscribe with error handling
+      unsubscribe = wsClient.subscribe([
+        `databases.${DATABASE_ID}.collections.messages.documents`
+      ], response => {
+        if (response.events.includes('databases.*.collections.*.documents.*.create')) {
+          const newMessage = response.payload as AppwriteMessage;
+          setMessages(prev => [...prev, newMessage]);
+        }
+      });
 
-        // Add error handler
-        wsClient.subscribe('error', (error) => {
-          console.error('WebSocket error:', error);
-          // Attempt to reconnect
-          if (unsubscribe) {
-            unsubscribe();
-            unsubscribe = wsClient?.subscribe([
-              `databases.${DATABASE_ID}.collections.messages.documents`
-            ], response => {
-              if (response.events.includes('databases.*.collections.*.documents.*.create')) {
-                const newMessage = response.payload as AppwriteMessage;
-                setMessages(prev => [...prev, newMessage]);
-              }
-            });
-          }
-        });
+      // Add error handler
+      wsClient.subscribe('error', (error) => {
+        console.error('WebSocket error:', error);
+        // Attempt to reconnect
+        if (unsubscribe) {
+          unsubscribe();
+          unsubscribe = wsClient?.subscribe([
+            `databases.${DATABASE_ID}.collections.messages.documents`
+          ], response => {
+            if (response.events.includes('databases.*.collections.*.documents.*.create')) {
+              const newMessage = response.payload as AppwriteMessage;
+              setMessages(prev => [...prev, newMessage]);
+            }
+          });
+        }
+      });
 
-      } catch (error) {
-        console.error('Error setting up WebSocket:', error);
-      }
+    } catch (error) {
+      console.error('Error setting up WebSocket:', error);
     }
 
+    // Cleanup function
     return () => {
-      // Clean up subscription
       if (unsubscribe) {
         try {
           unsubscribe();
@@ -339,9 +335,15 @@ function useChat(
           console.error('Error cleaning up WebSocket:', error);
         }
       }
-      // Clean up client
       wsClient = null;
     };
+  }, []); // Empty dependency array means this runs once on mount
+
+  // Separate useEffect for loading messages when entering break mode
+  useEffect(() => {
+    if (mode === 'shortBreak' || mode === 'longBreak') {
+      loadMessages();
+    }
   }, [mode, loadMessages]);
 
   // Auto-scroll chat when new messages arrive
