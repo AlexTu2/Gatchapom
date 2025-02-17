@@ -77,10 +77,7 @@ export function useStickers() {
 
   const getStickerId = (name: string) => {
     // If we're still loading, wait
-    if (isLoading) {
-      console.log('Still loading stickers...');
-      return undefined;
-    }
+    if (isLoading) return undefined;
 
     // Try all variations of the name
     const variations = [
@@ -96,24 +93,17 @@ export function useStickers() {
       if (id) return id;
     }
 
-    // If no match found, log the attempted variations
-    console.warn(`No ID found for sticker name: ${name}`, {
-      tried: variations,
-      availableNames: Object.keys(stickerNameToId),
-      isLoading,
-      totalMappings: Object.keys(stickerNameToId).length
-    });
-
+    // Only log if sticker is truly not found
+    console.error(`Sticker not found: ${name}`);
     return undefined;
   };
 
   const getStickerUrl = (nameOrId: string) => {
     try {
-      // If it's a name, convert to ID
       const fileId = stickerNameToId[nameOrId] || nameOrId;
       return storage.getFileView(STICKERS_BUCKET_ID, fileId);
     } catch (error) {
-      console.error('Error getting sticker URL:', error);
+      console.error('Failed to get sticker URL');
       return '/fallback-sticker.png';
     }
   };

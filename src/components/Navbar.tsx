@@ -18,18 +18,10 @@ export function Navbar() {
   const microLeons = Number(user.current?.prefs.microLeons) || 0;
 
   useEffect(() => {
-    console.log('Current user:', user.current);
-    console.log('User prefs:', user.current?.prefs);
-    console.log('Avatar URL from prefs:', user.current?.prefs?.avatarUrl);
-    
     if (user.current?.prefs?.avatarUrl) {
-      console.log('Setting avatar URL to:', user.current.prefs.avatarUrl);
       setAvatarUrl(user.current.prefs.avatarUrl);
-    } else {
-      console.log('No avatar URL found, setting to null');
-      setAvatarUrl(null);
     }
-  }, [user.current?.prefs?.avatarUrl]);
+  }, [user.current]);
 
   useEffect(() => {
     console.log('Current microLeons from prefs:', user.current?.prefs?.microLeons);
