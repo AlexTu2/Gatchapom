@@ -13,7 +13,7 @@ interface UserContextType {
   logout: () => void;
   register: (username: string, email: string, password: string) => void;
   updateAvatar: (fileId: string) => void;
-  updateUser: (user: Models.User<Models.Preferences>) => void;
+  updateUser: (updates: Partial<Models.Preferences>) => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -171,13 +171,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const register = async (username: string, email: string, password: string) => {
     try {
-      // Create the user account
       await account.create(ID.unique(), email, password, username);
-      // Create the session
       await account.createEmailPasswordSession(email, password);
-      const loggedInUser = await account.get();
       
-      // Define initial preferences with all required fields
       const defaultTimerSettings = {
         work: 25,
         shortBreak: 5,
@@ -186,33 +182,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
         currentMode: 'work'
       };
 
+      // Only include the essential preference fields
       const initialPrefs = {
-        avatarId: null,
         avatarUrl: null,
         microLeons: "0",
         unlockedStickers: "[]",
         timerSettings: JSON.stringify(defaultTimerSettings)
       };
 
-      // Update preferences
-      const updatedPrefs = await account.updatePrefs(initialPrefs);
-      
-      // Get fresh user data with updated preferences
+      await account.updatePrefs(initialPrefs);
       const finalUser = await account.get();
-      
-      // Update local user state with properly typed preferences
-      setUser({
-        ...finalUser,
-        prefs: {
-          ...finalUser.prefs,
-          avatarId: null,
-          avatarUrl: null,
-          microLeons: "0",
-          unlockedStickers: "[]",
-          timerSettings: JSON.stringify(defaultTimerSettings)
-        }
-      });
-
+      setUser(finalUser);
       navigate('/');
     } catch (error) {
       console.error('Registration error:', error);
@@ -220,28 +200,41 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateUser = async (updatedUser: Models.User<Models.Preferences>) => {
+  const updateUser = async (updates: Partial<Models.Preferences>) => {
     try {
-      // Get current preferences to ensure we don't lose existing values
-      const currentUser = await account.get();
-      
-      // Merge existing prefs with updates, ensuring we keep existing values
-      const typedPrefs = {
-        ...currentUser.prefs, // Start with current prefs
-        ...updatedUser.prefs, // Apply updates
-        // Ensure critical fields are preserved and properly typed
-        microLeons: updatedUser.prefs.microLeons || currentUser.prefs.microLeons || "0",
-        unlockedStickers: updatedUser.prefs.unlockedStickers || currentUser.prefs.unlockedStickers || "[]",
-        timerSettings: updatedUser.prefs.timerSettings || currentUser.prefs.timerSettings || JSON.stringify(DEFAULT_SETTINGS)
-      };
+      if (!user) throw new Error('No user logged in');
 
-      // Update the preferences in Appwrite
-      await account.updatePrefs(typedPrefs);
+      console.log('UpdateUser called with:', {
+        currentUser: user,
+        updates,
+        currentPrefs: user.prefs
+      });
+
+      // Get current prefs
+      const currentPrefs = user.prefs;
       
-      // Get fresh user data to ensure we have the latest state
+      // Create clean updates object with only allowed fields
+      const cleanUpdates: Partial<Models.Preferences> = { ...currentPrefs };
+      
+      // Only update fields that are actually provided in updates
+      Object.keys(updates).forEach(key => {
+        if (key in updates) {
+          cleanUpdates[key] = updates[key];
+        }
+      });
+
+      console.log('Clean updates:', cleanUpdates);
+
+      // Update preferences with clean data
+      await account.updatePrefs(cleanUpdates);
+      
+      // Get fresh user data
       const freshUser = await account.get();
-      
-      // Update local state
+      console.log('Fresh user after update:', {
+        freshUser,
+        freshPrefs: freshUser.prefs
+      });
+
       setUser(freshUser);
     } catch (error) {
       console.error('Error updating user:', error);

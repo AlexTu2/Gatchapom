@@ -9,26 +9,24 @@ import {
 import { useEffect, useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useStickers } from '@/lib/hooks/useStickers';
+import { useAvatar } from '@/lib/context/avatar';
 
 export function Navbar() {
   const user = useUser();
   const navigate = useNavigate();
   const { getStickerUrl, stickers } = useStickers();
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const { avatarUrl, setAvatarUrl } = useAvatar();
   const microLeons = Number(user.current?.prefs.microLeons) || 0;
 
   useEffect(() => {
-    if (user.current?.prefs) {
-      setAvatarUrl(user.current.prefs.avatarUrl || null);
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.debug('User preferences updated:', {
-          microLeons: user.current.prefs.microLeons,
-          avatarUrl: user.current.prefs.avatarUrl
-        });
-      }
+    if (user.current?.prefs.avatarUrl) {
+      const url = new URL(user.current.prefs.avatarUrl);
+      url.searchParams.set('t', Date.now().toString());
+      setAvatarUrl(url.toString());
+    } else {
+      setAvatarUrl(null);
     }
-  }, [user.current?.prefs]);
+  }, [user.current?.prefs.avatarUrl, setAvatarUrl]);
 
   // Find microLeon sticker
   const microLeonSticker = useMemo(() => ({
@@ -83,13 +81,15 @@ export function Navbar() {
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full overflow-hidden p-0">
                   {avatarUrl ? (
                     <img
+                      key={avatarUrl}
                       src={avatarUrl}
-                      alt={user.current.name}
+                      alt={user.current?.name}
                       className="h-full w-full object-cover"
+                      onError={() => setAvatarUrl(null)}
                     />
                   ) : (
                     <div className="h-full w-full bg-gray-200 flex items-center justify-center text-sm font-medium">
-                      {user.current.name?.charAt(0).toUpperCase()}
+                      {user.current?.name?.charAt(0).toUpperCase()}
                     </div>
                   )}
                 </Button>

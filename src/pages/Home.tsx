@@ -97,24 +97,47 @@ function useModeTransition() {
     if (!user?.current?.$id) return;
     
     try {
-      const currentLeons = Number(user.current.prefs.microLeons) || 0;
+      // Get fresh user data first
+      const currentUser = await account.get();
+      const currentLeons = Number(currentUser.prefs.microLeons) || 0;
       const newLeons = currentLeons + amount;
       
-      // Get fresh user data to avoid race conditions
-      const currentUser = await account.get();
-      const updatedPrefs = await account.updatePrefs({
+      console.log('Before update:', {
+        currentLeons,
+        newLeons,
+        amount,
+        currentPrefs: currentUser.prefs
+      });
+
+      // Update using the clean updateUser function with only the microLeons field
+      await user.updateUser({
         ...currentUser.prefs,
         microLeons: newLeons.toString()
       });
-      
-      // Update local user state with the new prefs
-      user.updateUser({
-        ...currentUser,
-        prefs: {
-          ...currentUser.prefs,
-          microLeons: newLeons.toString() // Ensure this is updated
-        }
+
+      // Verify the update
+      const verifyUser = await account.get();
+      console.log('After update:', {
+        verifiedLeons: Number(verifyUser.prefs.microLeons),
+        expectedLeons: newLeons,
+        verifyPrefs: verifyUser.prefs
       });
+
+      if (Number(verifyUser.prefs.microLeons) !== newLeons) {
+        console.error('Micro leon update failed - retrying');
+        await user.updateUser({
+          ...verifyUser.prefs,
+          microLeons: newLeons.toString()
+        });
+
+        const finalCheck = await account.get();
+        console.log('After retry:', {
+          finalLeons: Number(finalCheck.prefs.microLeons),
+          expectedLeons: newLeons,
+          finalPrefs: finalCheck.prefs
+        });
+      }
+
     } catch (error) {
       console.error('Error awarding micro leons:', error);
     }
@@ -263,26 +286,62 @@ function useChat(
 
   // Load messages when entering break mode
   useEffect(() => {
+    let wsClient: Client | null = null;
+    let unsubscribe: (() => void) | null = null;
+
     if (mode === 'shortBreak' || mode === 'longBreak') {
       loadMessages();
       
-      const client = new Client()
+      // Create new client
+      wsClient = new Client()
         .setEndpoint('https://cloud.appwrite.io/v1')
         .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
       
-      const unsubscribe = client.subscribe([
-        `databases.${DATABASE_ID}.collections.messages.documents`
-      ], response => {
-        if (response.events.includes('databases.*.collections.*.documents.*.create')) {
-          const newMessage = response.payload as AppwriteMessage;
-          setMessages(prev => [...prev, newMessage]);
-        }
-      });
+      try {
+        // Subscribe with error handling
+        unsubscribe = wsClient.subscribe([
+          `databases.${DATABASE_ID}.collections.messages.documents`
+        ], response => {
+          if (response.events.includes('databases.*.collections.*.documents.*.create')) {
+            const newMessage = response.payload as AppwriteMessage;
+            setMessages(prev => [...prev, newMessage]);
+          }
+        });
 
-      return () => {
-        unsubscribe();
-      };
+        // Add error handler
+        wsClient.subscribe('error', (error) => {
+          console.error('WebSocket error:', error);
+          // Attempt to reconnect
+          if (unsubscribe) {
+            unsubscribe();
+            unsubscribe = wsClient?.subscribe([
+              `databases.${DATABASE_ID}.collections.messages.documents`
+            ], response => {
+              if (response.events.includes('databases.*.collections.*.documents.*.create')) {
+                const newMessage = response.payload as AppwriteMessage;
+                setMessages(prev => [...prev, newMessage]);
+              }
+            });
+          }
+        });
+
+      } catch (error) {
+        console.error('Error setting up WebSocket:', error);
+      }
     }
+
+    return () => {
+      // Clean up subscription
+      if (unsubscribe) {
+        try {
+          unsubscribe();
+        } catch (error) {
+          console.error('Error cleaning up WebSocket:', error);
+        }
+      }
+      // Clean up client
+      wsClient = null;
+    };
   }, [mode, loadMessages]);
 
   // Auto-scroll chat when new messages arrive
@@ -459,9 +518,14 @@ export function Home() {
     name: 'microLeon.png'
   }), []); // Simplified since we know the ID
 
-  // Handle timer completion
+  // Add a ref to track if we're currently processing a completion
+  const isProcessingCompletion = useRef(false);
+
+  // Update the timer completion effect
   useEffect(() => {
-    if (timeLeft === 0 && !showCompletionDialog) {
+    if (timeLeft === 0 && !showCompletionDialog && !isProcessingCompletion.current) {
+      isProcessingCompletion.current = true;  // Set processing flag
+      
       alarmSound.current.currentTime = 0;
       alarmSound.current.play();
       
@@ -473,25 +537,43 @@ export function Home() {
       if (mode === 'work') {
         const newCompletedPomodoros = completedPomodoros + 1;
         setCompletedPomodoros(newCompletedPomodoros);
-        
-        const reward = newCompletedPomodoros % settings.longBreakInterval === 0 ? 50 : 10;
-        awardMicroLeons(reward);
         setShowCompletionDialog(true);
       } else {
         handleModeChange('work');
         setTimeLeft(settings.work * (isDevMode ? 1 : 60));
         setIsRunning(false);
       }
+      
+      // Reset processing flag after a short delay
+      setTimeout(() => {
+        isProcessingCompletion.current = false;
+      }, 100);
     }
-  }, [timeLeft, mode, completedPomodoros, settings, isDevMode, showCompletionDialog, handleModeChange, awardMicroLeons, setTimeLeft, setIsRunning]);
+  }, [timeLeft, mode, completedPomodoros, settings, isDevMode, showCompletionDialog, handleModeChange, setTimeLeft, setIsRunning]);
 
-  const handleCompletionDismiss = useCallback(() => {
+  // Update handleCompletionDismiss to reset the processing flag
+  const handleCompletionDismiss = useCallback(async () => {
+    if (isProcessingCompletion.current) return; // Prevent multiple executions
+    
     setShowCompletionDialog(false);
-    const nextMode = completedPomodoros % settings.longBreakInterval === 0 ? 'longBreak' : 'shortBreak';
-    handleModeChange(nextMode);
-    setTimeLeft(settings[nextMode] * (isDevMode ? 1 : 60));
-    setIsRunning(false);
-  }, [completedPomodoros, settings, isDevMode, handleModeChange, setTimeLeft, setIsRunning]);
+    isProcessingCompletion.current = true;
+    
+    try {
+      // Award micro leons based on completion count
+      const reward = completedPomodoros % settings.longBreakInterval === 0 ? 50 : 10;
+      await awardMicroLeons(reward);
+      
+      // Reset only after micro leons are awarded
+      if (mode === 'work') {
+        const nextMode = completedPomodoros % settings.longBreakInterval === 0 ? 'longBreak' : 'shortBreak';
+        handleModeChange(nextMode);
+        setTimeLeft(settings[nextMode] * (isDevMode ? 1 : 60));
+        setIsRunning(false);
+      }
+    } finally {
+      isProcessingCompletion.current = false;
+    }
+  }, [completedPomodoros, settings, mode, isDevMode, handleModeChange, awardMicroLeons, setTimeLeft, setIsRunning]);
 
   const formatTime = useCallback((seconds: number, isMessageTime?: boolean): string => {
     if (isMessageTime) {

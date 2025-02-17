@@ -7,6 +7,7 @@ import { TimerProvider } from "./lib/context/timer";
 import { Navbar } from "@/components/Navbar";
 import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { AvatarProvider } from '@/lib/context/avatar';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { current: user, isLoading } = useUser();
@@ -74,13 +75,15 @@ function AppContent() {
 
 function App() {
   return (
-      <BrowserRouter>
-        <UserProvider>
+    <BrowserRouter>
+      <UserProvider>
+        <AvatarProvider>
           <TimerProvider>
             <AppContent />
           </TimerProvider>
-        </UserProvider>
-      </BrowserRouter>
+        </AvatarProvider>
+      </UserProvider>
+    </BrowserRouter>
   );
 }
 

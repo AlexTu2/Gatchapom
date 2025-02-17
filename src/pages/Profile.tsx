@@ -10,6 +10,7 @@ import { account, storage, BUCKET_ID } from "../lib/appwrite";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ID } from "appwrite";
 import { UserPrefs } from "@/lib/types/user";
+import { useAvatar } from '@/lib/context/avatar';
 
 const usernameSchema = z.object({
   username: z.string()
@@ -37,6 +38,7 @@ const passwordSchema = z.object({
 
 export function Profile() {
   const user = useUser();
+  const { avatarUrl, setAvatarUrl } = useAvatar();
   // Separate error states for each form
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -46,7 +48,6 @@ export function Profile() {
   const [usernameSuccess, setUsernameSuccess] = useState<string | null>(null);
   const [emailSuccess, setEmailSuccess] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
   const usernameForm = useForm<z.infer<typeof usernameSchema>>({
@@ -74,12 +75,11 @@ export function Profile() {
   });
 
   useEffect(() => {
-    if (user.current?.prefs?.avatarUrl) {
-      setAvatarUrl(user.current.prefs.avatarUrl.toString());
-    } else {
-      setAvatarUrl(null);
+    // Update avatar URL when user preferences change
+    if (user.current?.prefs.avatarUrl) {
+      setAvatarUrl(user.current.prefs.avatarUrl);
     }
-  }, [user.current?.prefs?.avatarUrl]);
+  }, [user.current?.prefs.avatarUrl]);
 
   const onUsernameSubmit = async (values: z.infer<typeof usernameSchema>) => {
     try {
@@ -146,11 +146,10 @@ export function Profile() {
     }
   }
 
-  async function handleAvatarUpload(event: React.ChangeEvent<HTMLInputElement>) {
+  const onAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
-      setIsUploading(true);
       setAvatarError(null);
-      const file = event.target.files?.[0];
+      const file = e.target.files?.[0];
       if (!file) return;
 
       if (!file.type.startsWith('image/')) {
@@ -158,10 +157,11 @@ export function Profile() {
         return;
       }
 
-      if (file.size > 5 * 1024 * 1024) {
-        setAvatarError('Image must be less than 5MB');
-        return;
-      }
+      setIsUploading(true);
+      
+      // Create local URL for immediate preview
+      const localUrl = URL.createObjectURL(file);
+      setAvatarUrl(localUrl);
 
       // Delete old avatar if it exists
       if (user.current?.prefs?.avatarId) {
@@ -173,34 +173,29 @@ export function Profile() {
       }
 
       // Upload new file
-      const response = await storage.createFile(
-        BUCKET_ID,
-        ID.unique(),
-        file
-      );
-
+      const uploadedFile = await storage.createFile(BUCKET_ID, ID.unique(), file);
+      
       // Update user preferences with new avatar
-      await user.updateAvatar(response.$id);
-      const updatedPrefs = user.current?.prefs as UserPrefs;
+      await user.updateAvatar(uploadedFile.$id);
       
-      // Force a new URL object with cache-busting
-      const avatarUrl = updatedPrefs?.avatarUrl; // Use avatarUrl from prefs
-      if (avatarUrl) {
-        const url = new URL(avatarUrl.toString());
-        url.searchParams.set('v', Date.now().toString());
-        setAvatarUrl(url.toString());
-      }
+      // Clean up local URL
+      URL.revokeObjectURL(localUrl);
       
-      setEmailSuccess("Profile picture updated successfully!");
-      event.target.value = '';
-    } catch (err: unknown) {
-      console.error('Avatar upload error:', err);
-      setAvatarError(err instanceof Error ? err.message : 'Failed to upload profile picture');
-      setAvatarUrl(null);
+      // Get the server URL
+      const serverUrl = storage.getFileView(BUCKET_ID, uploadedFile.$id);
+      setAvatarUrl(serverUrl.toString());
+
+      // Reset file input
+      e.target.value = '';
+      
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      setAvatarError("Failed to upload avatar. Please try again.");
+      setAvatarUrl(null); // Reset on error
     } finally {
       setIsUploading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 py-12">
@@ -236,7 +231,7 @@ export function Profile() {
                 <Input
                   type="file"
                   accept="image/*"
-                  onChange={handleAvatarUpload}
+                  onChange={onAvatarUpload}
                   disabled={isUploading}
                 />
                 {avatarError && <p className="text-red-500 text-sm mt-1">{avatarError}</p>}

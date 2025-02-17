@@ -48,8 +48,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         const prefs = user.current.prefs;
         let savedSettings: TimerSettings | null = null;
 
-        // Check if timerSettings exists and is valid JSON
-        if (prefs.timerSettings) {
+        if (typeof prefs.timerSettings === 'string') {
           try {
             savedSettings = JSON.parse(prefs.timerSettings);
           } catch (e) {
@@ -57,21 +56,17 @@ export function TimerProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        // Only update settings if we have valid saved settings
-        if (savedSettings && 
-            typeof savedSettings.work === 'number' &&
-            typeof savedSettings.shortBreak === 'number' &&
-            typeof savedSettings.longBreak === 'number' &&
-            typeof savedSettings.longBreakInterval === 'number') {
-          const cleanSettings: TimerSettings = {
-            work: savedSettings.work,
-            shortBreak: savedSettings.shortBreak,
-            longBreak: savedSettings.longBreak,
-            longBreakInterval: savedSettings.longBreakInterval,
-            currentMode: savedSettings.currentMode || 'work'
-          };
-          setSettings(cleanSettings);
-          setMode(cleanSettings.currentMode);
+        if (savedSettings && isValidTimerSettings(savedSettings)) {
+          setSettings(savedSettings);
+          setMode(savedSettings.currentMode || 'work');
+        } else {
+          // Reset to defaults if settings are invalid
+          const defaultSettings = { ...DEFAULT_SETTINGS };
+          await user.updateUser({
+            timerSettings: JSON.stringify(defaultSettings)
+          });
+          setSettings(defaultSettings);
+          setMode(defaultSettings.currentMode);
         }
       } catch (error) {
         console.error('Error loading timer settings:', error);
@@ -81,25 +76,20 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     }
 
     loadSettings();
-  }, [user.current?.$id]);
+  }, [user?.current]);
 
   // Save settings to user preferences
   const updateSettings = async (newSettings: TimerSettings) => {
     if (!user?.current) return;
 
     try {
-      const updatedPrefs = await account.updatePrefs({
-        ...user.current.prefs,
+      // Only update the timerSettings field
+      await user.updateUser({
         timerSettings: JSON.stringify(newSettings)
       });
       
       setSettings(newSettings);
       setMode(newSettings.currentMode);
-      
-      user.updateUser({
-        ...user.current,
-        prefs: updatedPrefs
-      });
     } catch (error) {
       console.error('Error saving timer settings:', error);
       throw error;
@@ -108,9 +98,23 @@ export function TimerProvider({ children }: { children: ReactNode }) {
 
   // Update mode and save to settings
   const handleModeChange = async (newMode: TimerMode) => {
-    const newSettings = { ...settings, currentMode: newMode };
-    setMode(newMode);
-    await updateSettings(newSettings);
+    try {
+      // Get fresh user data to avoid overwriting other fields
+      const currentUser = await account.get();
+      const currentPrefs = currentUser.prefs;
+      
+      // Only update the timerSettings field
+      const newSettings = { ...settings, currentMode: newMode };
+      await user.updateUser({
+        ...currentPrefs, // Keep all existing preferences
+        timerSettings: JSON.stringify(newSettings)
+      });
+      
+      setMode(newMode);
+      setSettings(newSettings);
+    } catch (error) {
+      console.error('Error updating timer mode:', error);
+    }
   };
 
   return (
@@ -132,4 +136,16 @@ export function useTimer() {
     throw new Error("useTimer must be used within a TimerProvider");
   }
   return context;
+}
+
+// Add helper function to validate timer settings
+function isValidTimerSettings(settings: any): settings is TimerSettings {
+  return (
+    typeof settings === 'object' &&
+    typeof settings.work === 'number' &&
+    typeof settings.shortBreak === 'number' &&
+    typeof settings.longBreak === 'number' &&
+    typeof settings.longBreakInterval === 'number' &&
+    (!settings.currentMode || typeof settings.currentMode === 'string')
+  );
 } 
