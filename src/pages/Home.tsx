@@ -6,13 +6,14 @@ import { Label } from "@/components/ui/label";
 import { useUser } from "../lib/context/user";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { databases, DATABASE_ID, account } from "../lib/appwrite";
-import { ID, Query } from "appwrite";
+import { ID, Query, Models } from "appwrite";
 import { useTimer } from "@/lib/context/timer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronDown } from "lucide-react";
 import { Client } from "appwrite";
 import { StickerPicker } from "@/components/StickerPicker";
 import { useStickers } from '@/lib/hooks/useStickers';
+import { cn } from "@/lib/utils";
 
 // Define interfaces
 type TimerMode = 'work' | 'shortBreak' | 'longBreak';
@@ -137,7 +138,11 @@ interface AppwriteMessage {
 }
 
 // Create a custom hook for chat functionality
-function useChat(user: ReturnType<typeof useUser>, mode: TimerMode) {
+function useChat(
+  user: ReturnType<typeof useUser>, 
+  mode: TimerMode,
+  unlockedStickers: { [key: string]: number }
+) {
   const [messages, setMessages] = useState<AppwriteMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [cursorPosition, setCursorPosition] = useState<number>(0);
@@ -216,6 +221,18 @@ function useChat(user: ReturnType<typeof useUser>, mode: TimerMode) {
     try {
       const content = newMessage.trim();
       
+      // Check if message contains stickers and validate permissions
+      const stickerMatches = content.match(/(:[\w-]+:)/g);
+      if (stickerMatches) {
+        for (const match of stickerMatches) {
+          const stickerName = match.replace(/:/g, '') + '.png';
+          if (!(unlockedStickers[stickerName] > 0)) {
+            console.log(`Sticker not unlocked: ${stickerName}`);
+            return; // Don't send the message if user doesn't have all stickers
+          }
+        }
+      }
+      
       await databases.createDocument(
         DATABASE_ID,
         'messages',
@@ -233,7 +250,7 @@ function useChat(user: ReturnType<typeof useUser>, mode: TimerMode) {
     } catch (error) {
       console.error('Error sending message:', error);
     }
-  }, [newMessage, user.current]);
+  }, [newMessage, user.current, unlockedStickers]);
 
   // Load messages when entering break mode
   useEffect(() => {
@@ -267,6 +284,12 @@ function useChat(user: ReturnType<typeof useUser>, mode: TimerMode) {
       setShowScrollButton(true);
     }
   }, [messages, isNearBottom, scrollToBottom]);
+
+  useEffect(() => {
+    console.log('Current messages:', messages);
+    console.log('Current user:', user.current);
+    console.log('Current unlockedStickers:', unlockedStickers);
+  }, [messages, user.current, unlockedStickers]);
 
   return {
     messages,
@@ -366,51 +389,76 @@ function useSettings(user: ReturnType<typeof useUser>) {
   };
 }
 
-const MessageContent = ({ content, isOwnMessage }: { content: string, isOwnMessage: boolean }) => {
-  const { getStickerUrl, getStickerId, isLoading } = useStickers();
-  // Update regex to match both [sticker:name] and :name: formats
-  const parts = content.split(/(\[sticker:[^\]]+\]|:[^:]+:)/);
-  
+function MessageContent({ content, isOwnMessage }: { content: string, isOwnMessage: boolean }) {
+  const { getStickerUrl, getStickerId } = useStickers();
+
+  // Split content by sticker pattern (:stickername:)
+  const parts = content.split(/(:[\w-]+:)/g);
+
   return (
-    <div className={`text-sm mt-1 p-3 rounded-lg ${
-      isOwnMessage ? 'bg-blue-500 text-white' : 'bg-gray-100'
-    }`}>
+    <div className={cn(
+      "rounded-lg px-3 py-2 text-sm",
+      isOwnMessage ? "bg-primary text-primary-foreground" : "bg-muted"
+    )}>
       {parts.map((part, index) => {
-        // Match either [sticker:name] or :name: format
-        const stickerMatch = part.match(/\[sticker:([^\]]+)\]|:([^:]+):/);
+        // Check if this part matches sticker pattern
+        const stickerMatch = part.match(/^:([\w-]+):$/);
+        
         if (stickerMatch) {
-          // Get the name from whichever group matched (1 or 2)
-          const stickerName = stickerMatch[1] || stickerMatch[2];
-          const stickerId = getStickerId(stickerName);
-          if (!stickerId) {
+          const stickerName = stickerMatch[1];
+          const stickerId = getStickerId(`${stickerName}.png`);
+          
+          // If sticker exists, show the image
+          if (stickerId) {
             return (
-              <span 
+              <img 
                 key={index}
-                className="inline-block h-8 w-8 align-middle mx-1 bg-gray-100 rounded text-xs text-center leading-8"
-                title={isLoading ? "Loading sticker..." : `Sticker not found: ${stickerName}`}
-              >
-                {isLoading ? "⌛" : "❌"}
-              </span>
+                src={getStickerUrl(stickerId)}
+                alt={`:${stickerName}:`}
+                className="inline-block h-6 w-6 align-middle"
+                onError={(e) => {
+                  console.error('Failed to load sticker:', stickerName);
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
             );
           }
-          return (
-            <img 
-              key={index}
-              src={getStickerUrl(stickerId)}
-              alt={stickerName}
-              className="inline-block h-8 w-8 align-middle mx-1"
-              onError={(e) => {
-                console.error(`Failed to load sticker: ${stickerName}`);
-                e.currentTarget.src = '/fallback-sticker.png';
-              }}
-            />
-          );
+          
+          // If sticker doesn't exist, show the text
+          return <span key={index}>{part}</span>;
         }
+        
+        // Regular text
         return <span key={index}>{part}</span>;
       })}
     </div>
   );
-};
+}
+
+// Add this hook at the top with other hooks
+function useUnlockedStickers(user: ReturnType<typeof useUser>, stickers: Models.File[]) {
+  return useMemo(() => {
+    try {
+      const parsed = JSON.parse(user.current?.prefs.unlockedStickers || '{}');
+      // Handle old array format
+      if (Array.isArray(parsed)) {
+        const converted: { [key: string]: number } = {};
+        parsed.forEach(stickerId => {
+          const sticker = stickers.find(s => s.$id === stickerId);
+          if (sticker) {
+            converted[sticker.name] = (converted[sticker.name] || 0) + 1;
+          }
+        });
+        return converted;
+      }
+      // Return parsed object if it's already in the new format
+      return parsed;
+    } catch (e) {
+      console.error('Failed to parse unlockedStickers:', e);
+      return {};
+    }
+  }, [user.current?.prefs.unlockedStickers, stickers]);
+}
 
 export function Home() {
   const user = useUser();
@@ -445,7 +493,10 @@ export function Home() {
 
   const { handleModeChange, awardMicroLeons } = useModeTransition();
 
-  const chat = useChat(user, mode);
+  const parsedUnlockedStickers = useUnlockedStickers(user, stickers);
+
+  // Pass the parsed stickers to useChat
+  const chat = useChat(user, mode, parsedUnlockedStickers);
 
   // Find microLeon sticker ID
   const microLeonSticker = useMemo(() => ({
@@ -681,7 +732,7 @@ export function Home() {
 
             <form onSubmit={chat.sendMessage} className="flex items-center gap-2">
               <StickerPicker 
-                unlockedStickers={[...new Set(JSON.parse(user.current?.prefs.unlockedStickers || '[]') as string[])]}
+                unlockedStickers={parsedUnlockedStickers}
                 onStickerSelect={chat.insertSticker}
               />
               <Input 

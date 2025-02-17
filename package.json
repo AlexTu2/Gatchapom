@@ -21,7 +21,6 @@
     "@tailwindcss/vite": "^4.0.6",
     "appwrite": "^17.0.0",
     "canvas-confetti": "^1.9.3",
-    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.475.0",
     "react": "^19.0.0",

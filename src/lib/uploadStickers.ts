@@ -56,9 +56,10 @@ export async function uploadStickers() {
         ]
       );
       
+      console.log(`[SUCCESS] Uploaded ${filename}`);
       successCount++;
     } catch (error) {
-      console.error(`Failed to upload: ${path}`);
+      console.error(`[ERROR] Failed to upload ${path}:`, error);
       failCount++;
     }
   }

@@ -74,13 +74,13 @@ function AppContent() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <UserProvider>
-        <TimerProvider>
-          <AppContent />
-        </TimerProvider>
-      </UserProvider>
-    </BrowserRouter>
+      <BrowserRouter>
+        <UserProvider>
+          <TimerProvider>
+            <AppContent />
+          </TimerProvider>
+        </UserProvider>
+      </BrowserRouter>
   );
 }
 
