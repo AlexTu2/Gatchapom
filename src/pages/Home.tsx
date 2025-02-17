@@ -40,10 +40,41 @@ function useTimerLogic(settings: TimerSettings, isDevMode: boolean, mode: TimerM
   const [completedPomodoros, setCompletedPomodoros] = useState(0);
   const alarmSound = useRef(new Audio('/alarm.mp3'));
 
+  // Add this effect to handle timer completion
+  useEffect(() => {
+    if (timeLeft === 0 && isActive) {
+      setIsActive(false);
+      setIsRunning(false);
+      // Play the alarm sound
+      alarmSound.current.play().catch(error => {
+        console.error('Failed to play alarm sound:', error);
+      });
+      
+      if (mode === 'work') {
+        setCompletedPomodoros(prev => prev + 1);
+      }
+    }
+  }, [timeLeft, isActive, mode]);
+
+  // Add this effect to preload the audio
+  useEffect(() => {
+    // Preload the audio file
+    alarmSound.current.load();
+    
+    // Clean up on unmount
+    return () => {
+      alarmSound.current.pause();
+      alarmSound.current.currentTime = 0;
+    };
+  }, []);
+
   const resetTimer = useCallback(() => {
     setIsActive(false);
     setIsRunning(false);
     setTimeLeft(settings[mode] * (isDevMode ? 1 : 60));
+    // Stop alarm if it's playing
+    alarmSound.current.pause();
+    alarmSound.current.currentTime = 0;
   }, [settings, mode, isDevMode]);
 
   const toggleTimer = useCallback(() => {
