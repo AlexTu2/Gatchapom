@@ -36,6 +36,7 @@ export function Store() {
 
   const stickerSounds = useRef<StickerSounds>({});
   const [soundsLoaded, setSoundsLoaded] = useState(false);
+  const [playingSticker, setPlayingSticker] = useState<string | null>(null);
 
   useEffect(() => {
     const loadStickerSounds = async () => {
@@ -63,13 +64,28 @@ export function Store() {
     loadStickerSounds();
   }, [soundsLoaded]);
 
-  const playStickerSound = useCallback((stickerName: string) => {
-    const audio = stickerSounds.current[stickerName];
-    if (audio) {
-      audio.currentTime = 0;
-      audio.play().catch(error => {
-        console.error('Error playing sticker sound:', error);
-      });
+  const playStickersSequentially = useCallback(async (stickers: string[]) => {
+    for (const stickerName of stickers) {
+      if (STICKER_SOUND_MAP[stickerName]) {
+        await new Promise<void>((resolve) => {
+          const audio = stickerSounds.current[stickerName];
+          if (audio) {
+            setPlayingSticker(stickerName);
+            audio.currentTime = 0;
+            audio.onended = () => {
+              setPlayingSticker(null);
+              resolve();
+            };
+            audio.play().catch(error => {
+              console.error('Error playing sticker sound:', error);
+              setPlayingSticker(null);
+              resolve();
+            });
+          } else {
+            resolve();
+          }
+        });
+      }
     }
   }, []);
 
@@ -104,6 +120,18 @@ export function Store() {
     return counts;
   }, [unlockedStickers]);
 
+  const retryOperation = async (operation: () => Promise<any>, maxAttempts = 3, delay = 1000) => {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        if (attempt === maxAttempts) throw error;
+        console.log(`Attempt ${attempt} failed, retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  };
+
   const openBoosterPack = useCallback(async () => {
     const totalCost = BOOSTER_PACK_COST * packCount;
     if (!user.current || microLeons < totalCost || !stickers.length) return;
@@ -114,45 +142,48 @@ export function Store() {
       // Select random stickers
       const newStickers: Models.File[] = [];
       const updatedStickers = { ...unlockedStickers };
+      const newStickerSounds: string[] = [];
       
       for (let i = 0; i < packCount; i++) {
         const randomSticker = stickers[Math.floor(Math.random() * stickers.length)];
         newStickers.push(randomSticker);
-        
-        // Update the sticker count
         const stickerName = randomSticker.name;
         updatedStickers[stickerName] = (updatedStickers[stickerName] || 0) + 1;
         
-        // Play sound if it's a new sticker (count was 0 before)
         if (!unlockedStickers[stickerName] && STICKER_SOUND_MAP[stickerName]) {
-          playStickerSound(stickerName);
+          newStickerSounds.push(stickerName);
         }
       }
 
-      // Update user preferences
-      const updatedMicroLeons = microLeons - totalCost;
-      
-      await user.updateUser({
-        microLeons: updatedMicroLeons.toString(),
-        unlockedStickers: JSON.stringify(updatedStickers)
+      // Update user preferences with retry
+      await retryOperation(async () => {
+        const updatedMicroLeons = microLeons - totalCost;
+        await user.updateUser({
+          microLeons: updatedMicroLeons.toString(),
+          unlockedStickers: JSON.stringify(updatedStickers)
+        });
       });
 
+      // Only show reward and play sounds if update was successful
       setOpenedStickers(newStickers);
       setShowReward(true);
 
+      // Play sounds sequentially
+      await playStickersSequentially(newStickerSounds);
+
       // Trigger confetti effect
       confetti({
-        particleCount: 100 * packCount, // More confetti for more packs!
+        particleCount: 100 * packCount,
         spread: 70,
         origin: { y: 0.6 }
       });
     } catch (error) {
       console.error('Failed to open booster packs:', error);
-      alert('Failed to open booster packs. Please try again.');
+      alert('Connection error. Please try again. If the problem persists, refresh the page.');
     } finally {
       setIsOpening(false);
     }
-  }, [user, microLeons, stickers, unlockedStickers, packCount, playStickerSound]);
+  }, [user, microLeons, stickers, unlockedStickers, packCount, playStickersSequentially]);
 
   const handleUpload = async () => {
     if (isUploading) return;
@@ -306,7 +337,7 @@ export function Store() {
                       className="flex flex-col items-center gap-2"
                       onClick={() => {
                         if (isUnlocked && STICKER_SOUND_MAP[sticker.name]) {
-                          playStickerSound(sticker.name);
+                          playStickersSequentially([sticker.name]);
                         }
                       }}
                       style={{ cursor: isUnlocked && STICKER_SOUND_MAP[sticker.name] ? 'pointer' : 'default' }}
@@ -316,7 +347,7 @@ export function Store() {
                           aspect-square rounded-lg p-2 
                           flex items-center justify-center
                           ${isUnlocked 
-                            ? justUnlocked === sticker.$id
+                            ? playingSticker === sticker.name
                               ? 'bg-background border-2 border-yellow-400/50 shadow-[0_0_10px_rgba(250,204,21,0.3)] dark:shadow-[0_0_15px_rgba(250,204,21,0.2)]'
                               : 'bg-background border-2 border-primary/50'
                             : 'bg-muted border border-border'
@@ -389,8 +420,27 @@ export function Store() {
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
             {openedStickers.map((sticker, index) => (
-              <div key={index} className="flex flex-col items-center">
-                <div className="w-24 h-24 flex items-center justify-center">
+              <div 
+                key={index} 
+                className="flex flex-col items-center"
+                onClick={() => {
+                  if (STICKER_SOUND_MAP[sticker.name]) {
+                    playStickersSequentially([sticker.name]);
+                  }
+                }}
+                style={{ cursor: STICKER_SOUND_MAP[sticker.name] ? 'pointer' : 'default' }}
+              >
+                <div 
+                  className={`
+                    w-24 h-24 flex items-center justify-center
+                    rounded-lg p-2
+                    ${playingSticker === sticker.name
+                      ? 'bg-background border-2 border-yellow-400/50 shadow-[0_0_10px_rgba(250,204,21,0.3)] dark:shadow-[0_0_15px_rgba(250,204,21,0.2)]'
+                      : 'bg-background border-2 border-primary/50'
+                    }
+                    transition-colors duration-300
+                  `}
+                >
                   <img 
                     src={getStickerUrl(sticker.$id)}
                     alt={`New Sticker ${index + 1}`}
