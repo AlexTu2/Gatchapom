@@ -185,7 +185,7 @@ function useChat(user: ReturnType<typeof useUser>, mode: TimerMode) {
   const insertSticker = useCallback((sticker: string) => {
     if (cursorPosition === null) return;
     
-    const stickerText = `[sticker:${sticker}]`;
+    const stickerText = `:${sticker}:`;
     const before = newMessage.slice(0, cursorPosition);
     const after = newMessage.slice(cursorPosition);
     const updatedMessage = before + stickerText + after;
@@ -368,17 +368,19 @@ function useSettings(user: ReturnType<typeof useUser>) {
 
 const MessageContent = ({ content, isOwnMessage }: { content: string, isOwnMessage: boolean }) => {
   const { getStickerUrl, getStickerId, isLoading } = useStickers();
-  const parts = content.split(/(\[sticker:[^\]]+\])/);
+  // Update regex to match both [sticker:name] and :name: formats
+  const parts = content.split(/(\[sticker:[^\]]+\]|:[^:]+:)/);
   
   return (
     <div className={`text-sm mt-1 p-3 rounded-lg ${
       isOwnMessage ? 'bg-blue-500 text-white' : 'bg-gray-100'
     }`}>
       {parts.map((part, index) => {
-        const stickerMatch = part.match(/\[sticker:([^\]]+)\]/);
+        // Match either [sticker:name] or :name: format
+        const stickerMatch = part.match(/\[sticker:([^\]]+)\]|:([^:]+):/);
         if (stickerMatch) {
-          const stickerName = stickerMatch[1];
-          // Get the ID from the name
+          // Get the name from whichever group matched (1 or 2)
+          const stickerName = stickerMatch[1] || stickerMatch[2];
           const stickerId = getStickerId(stickerName);
           if (!stickerId) {
             return (
