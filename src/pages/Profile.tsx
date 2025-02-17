@@ -38,7 +38,9 @@ const passwordSchema = z.object({
 export function Profile() {
   const user = useUser();
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [usernameSuccess, setUsernameSuccess] = useState<string | null>(null);
+  const [emailSuccess, setEmailSuccess] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -74,42 +76,27 @@ export function Profile() {
     }
   }, [user.current?.prefs?.avatarUrl]);
 
-  async function onUsernameSubmit(values: z.infer<typeof usernameSchema>) {
+  const onUsernameSubmit = async (values: z.infer<typeof usernameSchema>) => {
     try {
       setError(null);
-      setSuccess(null);
+      setUsernameSuccess(null);
       
       await account.updateName(values.username);
       
-      // Update the user context
-      const updated = await account.get();
-      user.current = {
-        $id: updated.$id,
-        $createdAt: updated.$createdAt,
-        email: updated.email,
-        name: updated.name,
-        prefs: {
-          ...updated.prefs,
-          avatarId: updated.prefs.avatarId,
-          avatarUrl: updated.prefs.avatarUrl
-        }
-      };
+      const updatedUser = await account.get();
+      user.updateUser(updatedUser);
       
-      setSuccess("Username updated successfully!");
-    } catch (err: unknown) {
-      console.error('Username update error:', err);
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to update username');
-      }
+      setUsernameSuccess("Username updated successfully!");
+    } catch (error) {
+      console.error('Error updating username:', error);
+      setError("Failed to update username. Please try again.");
     }
-  }
+  };
 
   async function onEmailSubmit(values: z.infer<typeof emailSchema>) {
     try {
       setError(null);
-      setSuccess(null);
+      setEmailSuccess(null);
       
       await account.updateEmail(values.email, values.password);
       
@@ -127,7 +114,7 @@ export function Profile() {
         }
       };
       
-      setSuccess("Email updated successfully!");
+      setEmailSuccess("Email updated successfully!");
       emailForm.reset({ email: values.email, password: "" });
     } catch (err: unknown) {
       console.error('Email update error:', err);
@@ -142,11 +129,11 @@ export function Profile() {
   async function onPasswordSubmit(values: z.infer<typeof passwordSchema>) {
     try {
       setError(null);
-      setSuccess(null);
+      setPasswordSuccess(null);
       
       await account.updatePassword(values.newPassword, values.oldPassword);
       
-      setSuccess("Password updated successfully!");
+      setPasswordSuccess("Password updated successfully!");
       passwordForm.reset();
     } catch (err: unknown) {
       console.error('Password update error:', err);
@@ -203,7 +190,7 @@ export function Profile() {
         setAvatarUrl(url.toString());
       }
       
-      setSuccess("Profile picture updated successfully!");
+      setEmailSuccess("Profile picture updated successfully!");
       event.target.value = '';
     } catch (err: unknown) {
       console.error('Avatar upload error:', err);
@@ -252,7 +239,7 @@ export function Profile() {
                   disabled={isUploading}
                 />
                 {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
-                {success && <p className="text-green-500 text-sm mt-1">{success}</p>}
+                {emailSuccess && <p className="text-green-500 text-sm mt-1">{emailSuccess}</p>}
               </div>
             </div>
           </CardContent>
@@ -291,6 +278,9 @@ export function Profile() {
             <CardTitle>Update Username</CardTitle>
           </CardHeader>
           <CardContent>
+            {error && <p className="mb-4 text-red-500">{error}</p>}
+            {usernameSuccess && <p className="mb-4 text-green-500">{usernameSuccess}</p>}
+            
             <Form {...usernameForm}>
               <form onSubmit={usernameForm.handleSubmit(onUsernameSubmit)} className="space-y-4">
                 <div>
@@ -356,7 +346,7 @@ export function Profile() {
           </CardHeader>
           <CardContent>
             {error && <p className="mb-4 text-red-500">{error}</p>}
-            {success && <p className="mb-4 text-green-500">{success}</p>}
+            {passwordSuccess && <p className="mb-4 text-green-500">{passwordSuccess}</p>}
             
             <Form {...passwordForm}>
               <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
