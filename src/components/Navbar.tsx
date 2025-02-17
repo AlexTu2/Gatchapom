@@ -18,22 +18,23 @@ export function Navbar() {
   const microLeons = Number(user.current?.prefs.microLeons) || 0;
 
   useEffect(() => {
-    if (user.current?.prefs?.avatarUrl) {
-      setAvatarUrl(user.current.prefs.avatarUrl);
+    if (user.current?.prefs) {
+      setAvatarUrl(user.current.prefs.avatarUrl || null);
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('User preferences updated:', {
+          microLeons: user.current.prefs.microLeons,
+          avatarUrl: user.current.prefs.avatarUrl
+        });
+      }
     }
-  }, [user.current]);
-
-  useEffect(() => {
-    console.log('Current microLeons from prefs:', user.current?.prefs?.microLeons);
-  }, [user.current?.prefs?.microLeons]);
-
-  console.log('Current avatarUrl state:', avatarUrl);
+  }, [user.current?.prefs]);
 
   // Find microLeon sticker
   const microLeonSticker = useMemo(() => ({
     $id: '67b27bbc001cba8f5ed9',
     name: 'microLeon.png'
-  }), []); // Simplified since we know the ID
+  }), []);
 
   const handleLogout = async () => {
     await user.logout();

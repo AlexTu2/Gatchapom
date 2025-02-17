@@ -4,6 +4,7 @@ import { account, BUCKET_ID, storage } from "../appwrite";
 import type { UserPrefs } from '../types/user';
 import { Models } from "appwrite";
 import { useNavigate } from 'react-router-dom';
+import { TimerSettings } from './timer';
 
 interface UserContextType {
   current: Models.User<Models.Preferences> | null;
@@ -16,6 +17,15 @@ interface UserContextType {
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
+
+// Add DEFAULT_SETTINGS definition
+const DEFAULT_SETTINGS: TimerSettings = {
+  work: 25,
+  shortBreak: 5,
+  longBreak: 15,
+  longBreakInterval: 4,
+  currentMode: 'work'
+};
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Models.User<Models.Preferences> | null>(null);
@@ -161,26 +171,48 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const register = async (username: string, email: string, password: string) => {
     try {
+      // Create the user account
       await account.create(ID.unique(), email, password, username);
+      // Create the session
       await account.createEmailPasswordSession(email, password);
       const loggedInUser = await account.get();
       
+      // Define initial preferences with all required fields
+      const defaultTimerSettings = {
+        work: 25,
+        shortBreak: 5,
+        longBreak: 15,
+        longBreakInterval: 4,
+        currentMode: 'work'
+      };
+
       const initialPrefs = {
-        avatarId: undefined,
+        avatarId: null,
         avatarUrl: null,
         microLeons: "0",
         unlockedStickers: "[]",
-        timerSettings: JSON.stringify({
-          work: 25,
-          shortBreak: 5,
-          longBreak: 15,
-          longBreakInterval: 4,
-          currentMode: 'work'
-        })
+        timerSettings: JSON.stringify(defaultTimerSettings)
       };
 
-      const updatedUser = await account.updatePrefs(initialPrefs);
-      setUser({ ...loggedInUser, prefs: updatedUser });
+      // Update preferences
+      const updatedPrefs = await account.updatePrefs(initialPrefs);
+      
+      // Get fresh user data with updated preferences
+      const finalUser = await account.get();
+      
+      // Update local user state with properly typed preferences
+      setUser({
+        ...finalUser,
+        prefs: {
+          ...finalUser.prefs,
+          avatarId: null,
+          avatarUrl: null,
+          microLeons: "0",
+          unlockedStickers: "[]",
+          timerSettings: JSON.stringify(defaultTimerSettings)
+        }
+      });
+
       navigate('/');
     } catch (error) {
       console.error('Registration error:', error);
@@ -188,18 +220,33 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateUser = (updatedUser: Models.User<Models.Preferences>) => {
-    // Ensure prefs are properly structured
-    const typedUser = {
-      ...updatedUser,
-      prefs: {
-        ...updatedUser.prefs,
-        microLeons: updatedUser.prefs.microLeons || "0",
-        unlockedStickers: updatedUser.prefs.unlockedStickers || "[]",
-        timerSettings: updatedUser.prefs.timerSettings || JSON.stringify(DEFAULT_SETTINGS)
-      }
-    };
-    setUser(typedUser);
+  const updateUser = async (updatedUser: Models.User<Models.Preferences>) => {
+    try {
+      // Get current preferences to ensure we don't lose existing values
+      const currentUser = await account.get();
+      
+      // Merge existing prefs with updates, ensuring we keep existing values
+      const typedPrefs = {
+        ...currentUser.prefs, // Start with current prefs
+        ...updatedUser.prefs, // Apply updates
+        // Ensure critical fields are preserved and properly typed
+        microLeons: updatedUser.prefs.microLeons || currentUser.prefs.microLeons || "0",
+        unlockedStickers: updatedUser.prefs.unlockedStickers || currentUser.prefs.unlockedStickers || "[]",
+        timerSettings: updatedUser.prefs.timerSettings || currentUser.prefs.timerSettings || JSON.stringify(DEFAULT_SETTINGS)
+      };
+
+      // Update the preferences in Appwrite
+      await account.updatePrefs(typedPrefs);
+      
+      // Get fresh user data to ensure we have the latest state
+      const freshUser = await account.get();
+      
+      // Update local state
+      setUser(freshUser);
+    } catch (error) {
+      console.error('Error updating user:', error);
+      throw error;
+    }
   };
 
   return (
