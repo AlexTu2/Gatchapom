@@ -9,6 +9,8 @@ interface TimerContextType {
   isLoading: boolean;
   settings: TimerSettings;
   updateSettings: (newSettings: TimerSettings) => Promise<void>;
+  status: 'running' | 'paused';
+  setStatus: (status: 'running' | 'paused') => void;
 }
 
 export interface TimerSettings {
@@ -33,6 +35,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<TimerMode>('work');
   const [settings, setSettings] = useState<TimerSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
+  const [status, setStatus] = useState<'running' | 'paused'>('paused');
 
   // Load timer settings from user preferences
   useEffect(() => {
@@ -112,7 +115,9 @@ export function TimerProvider({ children }: { children: ReactNode }) {
       setMode: handleModeChange, 
       isLoading,
       settings,
-      updateSettings
+      updateSettings,
+      status,
+      setStatus
     }}>
       {children}
     </TimerContext.Provider>
