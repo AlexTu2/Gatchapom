@@ -6,27 +6,17 @@ import { useStickers } from '@/lib/hooks/useStickers';
 import { useMemo } from 'react';
 
 interface StickerPickerProps {
-  unlockedStickers: string[];  // Now contains file IDs instead of filenames
+  unlockedStickers: { [key: string]: number };  // Changed from string[] to dictionary
   onStickerSelect: (sticker: string) => void;
 }
 
 export function StickerPicker({ unlockedStickers, onStickerSelect }: StickerPickerProps) {
   const { stickers, isLoading, getStickerUrl } = useStickers();
 
-  // Process the unlocked stickers
-  const normalizedUnlocked = useMemo(() => 
-    unlockedStickers.map(id => 
-      id.endsWith('.png') ? id.replace('.png', '') : id
-    ),
-    [unlockedStickers]
-  );
-  
+  // Filter stickers that have a count > 0
   const unlockedStickerFiles = useMemo(() => 
-    stickers.filter(s => 
-      normalizedUnlocked.includes(s.$id) || 
-      normalizedUnlocked.includes(s.name.replace('.png', ''))
-    ),
-    [stickers, normalizedUnlocked]
+    stickers.filter(s => (unlockedStickers[s.name] || 0) > 0),
+    [stickers, unlockedStickers]
   );
 
   return (
@@ -55,7 +45,7 @@ export function StickerPicker({ unlockedStickers, onStickerSelect }: StickerPick
                 <button
                   key={sticker.$id}
                   onClick={() => onStickerSelect(sticker.name.replace('.png', ''))}
-                  className="aspect-square rounded-lg hover:bg-accent p-2 transition-colors"
+                  className="relative aspect-square rounded-lg hover:bg-accent p-2 transition-colors"
                 >
                   <img
                     src={getStickerUrl(sticker.$id)}
@@ -63,6 +53,12 @@ export function StickerPicker({ unlockedStickers, onStickerSelect }: StickerPick
                     className="w-full h-full object-contain"
                     loading="lazy"
                   />
+                  {/* Show count if more than 1 */}
+                  {unlockedStickers[sticker.name] > 1 && (
+                    <span className="absolute bottom-0 right-0 bg-primary text-primary-foreground rounded-full text-xs px-1 min-w-[1.25rem] text-center">
+                      {unlockedStickers[sticker.name]}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>

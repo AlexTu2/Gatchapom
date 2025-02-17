@@ -19,10 +19,24 @@ export function Store() {
   const [isUploading, setIsUploading] = useState(false);
   
   const microLeons = Number(user.current?.prefs.microLeons) || 0;
-  const unlockedStickers = user.current?.prefs.unlockedStickers ? 
-    JSON.parse(user.current.prefs.unlockedStickers) : [];
-
   const { stickers, isLoading, getStickerUrl } = useStickers();
+
+  // Parse unlocked stickers first
+  const unlockedStickers = useMemo(() => {
+    try {
+      return user.current?.prefs.unlockedStickers ? 
+        JSON.parse(user.current.prefs.unlockedStickers) : {};
+    } catch (e) {
+      console.error('Failed to parse unlockedStickers:', e);
+      return {};
+    }
+  }, [user.current?.prefs.unlockedStickers]);
+
+  // Then create the check function using the parsed data
+  const checkIfUnlocked = useCallback((stickerId: string) => {
+    const stickerFile = stickers.find(s => s.$id === stickerId);
+    return stickerFile ? (unlockedStickers[stickerFile.name] || 0) > 0 : false;
+  }, [stickers, unlockedStickers]);
 
   const microLeonSticker = useMemo(() => ({
     $id: '67b27bbc001cba8f5ed9',
@@ -32,8 +46,8 @@ export function Store() {
   // Create a map to count sticker quantities
   const stickerCounts = useMemo(() => {
     const counts: { [key: string]: number } = {};
-    unlockedStickers.forEach((sticker: string) => {
-      counts[sticker] = (counts[sticker] || 0) + 1;
+    Object.entries(unlockedStickers).forEach(([sticker, count]) => {
+      counts[sticker] = count;
     });
     return counts;
   }, [unlockedStickers]);
@@ -46,37 +60,47 @@ export function Store() {
     try {
       // Select a random sticker
       const randomSticker = stickers[Math.floor(Math.random() * stickers.length)];
+      const stickerName = randomSticker.name;
       
       // Update user preferences
-      const newMicroLeons = microLeons - BOOSTER_PACK_COST;
-      const newUnlockedStickers = [...unlockedStickers, randomSticker.$id];
+      const updatedMicroLeons = microLeons - BOOSTER_PACK_COST;
       
+      // Update the sticker count in the dictionary
+      const updatedStickers = {
+        ...unlockedStickers,
+        [stickerName]: (unlockedStickers[stickerName] || 0) + 1
+      };
+
       const updatedPrefs = {
         ...user.current.prefs,
-        microLeons: newMicroLeons.toString(),
-        unlockedStickers: JSON.stringify(newUnlockedStickers)
+        microLeons: updatedMicroLeons.toString(),
+        unlockedStickers: JSON.stringify(updatedStickers)
       };
-      
+
+      // Update Appwrite
       await account.updatePrefs(updatedPrefs);
+
+      // Update local user context
       user.updateUser({
         ...user.current,
         prefs: updatedPrefs
       });
-      
+
       setCurrentSticker(randomSticker.$id);
       setShowReward(true);
       
+      // Trigger confetti effect
       confetti({
         particleCount: 100,
         spread: 70,
         origin: { y: 0.6 }
       });
     } catch (error) {
-      console.error('Error opening booster pack:', error);
+      console.error('Failed to open booster pack:', error);
     } finally {
       setIsOpening(false);
     }
-  }, [user, microLeons, unlockedStickers, stickers]);
+  }, [user, microLeons, stickers, unlockedStickers]);
 
   const handleUpload = async () => {
     if (isUploading) return;
@@ -155,8 +179,8 @@ export function Store() {
               <h3 className="font-medium">Your Collection</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {stickers.map((sticker) => {
-                  const count = stickerCounts[sticker.$id] || 0;
-                  const isUnlocked = count > 0;
+                  const isUnlocked = checkIfUnlocked(sticker.$id);
+                  const count = unlockedStickers[sticker.name] || 0;
                   
                   return (
                     <div 
