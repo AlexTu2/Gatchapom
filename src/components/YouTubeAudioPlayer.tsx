@@ -8,6 +8,8 @@ import { Slider } from '@/components/ui/slider';
 import { getPlaylistVideos } from '@/lib/youtube';
 import { PRESET_PLAYLISTS } from '@/lib/playlists';
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { storage } from '@/lib/appwrite';
+import { AUDIO_BUCKET_ID } from '@/lib/audio';
 
 interface VideoInfo {
   id: string;
@@ -103,6 +105,8 @@ export function YouTubeAudioPlayer() {
   const { volume } = useAudio();
   const playerRef = useRef<YouTubePlayer | null>(null);
   const progressInterval = useRef<NodeJS.Timeout | null>(null);
+  const [playingCollection, setPlayingCollection] = useState<string | null>(null);
+  const customAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     loadYouTubeAPI().then(() => {
@@ -118,6 +122,30 @@ export function YouTubeAudioPlayer() {
       }
       if (progressInterval.current) {
         clearInterval(progressInterval.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    // Load custom audio
+    const loadCustomAudio = async () => {
+      try {
+        const audioUrl = storage.getFileView(AUDIO_BUCKET_ID, 'our_owns_music');
+        const audio = new Audio(audioUrl.toString());
+        audio.volume = volume;
+        customAudioRef.current = audio;
+      } catch (error) {
+        console.error('Failed to load custom audio:', error);
+      }
+    };
+
+    loadCustomAudio();
+
+    // Cleanup
+    return () => {
+      if (customAudioRef.current) {
+        customAudioRef.current.pause();
+        customAudioRef.current = null;
       }
     };
   }, []);
@@ -339,6 +367,20 @@ export function YouTubeAudioPlayer() {
 
   const loadPresetPlaylist = async (preset: typeof PRESET_PLAYLISTS[0]) => {
     try {
+      if (preset.id === 'mixed') {
+        // Play custom audio for 100Devs Collection
+        if (customAudioRef.current) {
+          customAudioRef.current.currentTime = 0;
+          customAudioRef.current.volume = volume;
+          await customAudioRef.current.play();
+          setPlayingCollection('mixed');
+          
+          customAudioRef.current.onended = () => {
+            setPlayingCollection(null);
+          };
+        }
+      }
+
       if (preset.type === 'mixed') {
         const videos: VideoInfo[] = [];
         
@@ -409,7 +451,13 @@ export function YouTubeAudioPlayer() {
               <Button
                 key={preset.id}
                 variant="outline"
-                className="flex flex-col items-start p-4 h-auto space-y-1 text-left"
+                className={`
+                  flex flex-col items-start p-4 h-auto space-y-1 text-left
+                  ${playingCollection === preset.id ? 
+                    'border-2 border-yellow-400/50 shadow-[0_0_10px_rgba(250,204,21,0.3)] dark:shadow-[0_0_15px_rgba(250,204,21,0.2)]' 
+                    : ''}
+                  transition-all duration-300
+                `}
                 onClick={() => loadPresetPlaylist(preset)}
               >
                 <span className="font-medium">{preset.name}</span>
