@@ -14,6 +14,7 @@ import { STICKER_SOUND_MAP } from "@/config/stickerSounds";
 import { useAudio } from "@/lib/context/audio";
 import { account } from '../lib/appwrite';
 import { type StickerCollection } from '../config/stickerSounds';
+import { MICRO_LEON_STICKER_ID } from '../config/constants';
 
 const BOOSTER_PACK_COST = 100;
 const MAX_PACKS = 10;
@@ -126,8 +127,11 @@ export function Store() {
     return count > 0;
   }, [stickers, unlockedStickers]);
 
+  // First verify this is the correct ID from your Appwrite storage
+  const MICRO_LEON_ID = '67b42a07002bcce132ca';
+
   const microLeonSticker = useMemo(() => ({
-    $id: '67b27bbc001cba8f5ed9',
+    $id: MICRO_LEON_STICKER_ID,
     name: 'microLeon.png',
     $createdAt: new Date().toISOString(),
     $updatedAt: new Date().toISOString()

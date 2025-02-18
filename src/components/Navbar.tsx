@@ -11,6 +11,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useStickers } from '@/lib/hooks/useStickers';
 import { useAvatar } from '@/lib/context/avatar';
 import { VolumeControl } from './VolumeControl';
+import { MICRO_LEON_STICKER_ID } from '../config/constants';
 
 export function Navbar() {
   const user = useUser();
@@ -64,17 +65,15 @@ export function Navbar() {
           <div className="flex items-center gap-3">
             <VolumeControl />
             <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full">
-              {microLeonSticker && (
-                <img 
-                  src={getStickerUrl(microLeonSticker.$id)}
-                  alt="Micro Leon" 
-                  className="h-6 w-6"
-                  onError={(e) => {
-                    console.error('Failed to load microLeon sticker');
-                    e.currentTarget.src = '/fallback-sticker.png';
-                  }}
-                />
-              )}
+              <img 
+                src={getStickerUrl(MICRO_LEON_STICKER_ID)}
+                alt="Micro Leon" 
+                className="h-8 w-8"
+                onError={(e) => {
+                  console.error('Failed to load microLeon sticker');
+                  e.currentTarget.src = '/microLeon.png';
+                }}
+              />
               <span className="font-medium text-white">{microLeons}</span>
             </div>
             <span className="text-sm font-medium text-white/90">{user.current.name}</span>
