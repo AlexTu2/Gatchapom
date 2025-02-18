@@ -1,4 +1,6 @@
-const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+import { uploadStickers } from "@/lib/uploadStickers";
+
+export const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
   if (!event.target.files || event.target.files.length === 0) {
     console.error('No files selected');
     return;

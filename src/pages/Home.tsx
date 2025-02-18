@@ -19,6 +19,7 @@ import { ID, Query, Client } from "appwrite";
 import { YouTubeAudioPlayer } from '@/components/YouTubeAudioPlayer';
 import { motion } from "framer-motion";
 import { useScroll } from "framer-motion";
+import { MICRO_LEON_STICKER_ID } from '../config/constants';
 
 // Define interfaces
 type TimerMode = 'work' | 'shortBreak' | 'longBreak';
@@ -603,7 +604,7 @@ export function Home() {
 
   // Find microLeon sticker ID
   const microLeonSticker = useMemo(() => ({
-    $id: '67b27bbc001cba8f5ed9',
+    $id: MICRO_LEON_STICKER_ID,
     name: 'microLeon.png'
   }), []); // Simplified since we know the ID
 
