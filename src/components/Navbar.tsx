@@ -41,20 +41,20 @@ export function Navbar() {
   };
 
   return (
-    <nav className="border-b bg-white">
+    <nav className="border-b bg-gradient-to-r from-[#2ea44f] to-[#3b82f6] text-white shadow-md">
       <div className="flex justify-between items-center p-4 container mx-auto">
         <div className="flex items-center gap-4">
           <Link to="/">
             <Button 
               variant="ghost" 
-              className="text-xl font-bold"
+              className="text-xl font-bold text-white hover:text-white/90 hover:bg-white/10"
             >
               Pomodoro Timer
             </Button>
           </Link>
           <Link 
             to="/store" 
-            className="text-sm font-medium text-gray-500 hover:text-gray-900"
+            className="text-sm font-medium text-white/90 hover:text-white"
           >
             Store
           </Link>
@@ -63,7 +63,7 @@ export function Navbar() {
         {user.current && (
           <div className="flex items-center gap-3">
             <VolumeControl />
-            <div className="flex items-center gap-2 text-yellow-600">
+            <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-full">
               {microLeonSticker && (
                 <img 
                   src={getStickerUrl(microLeonSticker.$id)}
@@ -75,9 +75,9 @@ export function Navbar() {
                   }}
                 />
               )}
-              <span className="font-medium">{microLeons}</span>
+              <span className="font-medium text-white">{microLeons}</span>
             </div>
-            <span className="text-sm font-medium">{user.current.name}</span>
+            <span className="text-sm font-medium text-white/90">{user.current.name}</span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full overflow-hidden p-0">
