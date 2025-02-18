@@ -123,17 +123,7 @@ export function Store() {
   const checkIfUnlocked = useCallback((stickerId: string) => {
     const stickerFile = stickers.find(s => s.$id === stickerId);
     const count = stickerFile ? (unlockedStickers[stickerFile.name] || 0) : 0;
-    const isUnlocked = count > 0;
-    
-    console.log('Checking if unlocked:', {
-      stickerId,
-      stickerName: stickerFile?.name,
-      unlockedStickers,
-      count,
-      isUnlocked
-    });
-    
-    return isUnlocked;
+    return count > 0;
   }, [stickers, unlockedStickers]);
 
   const microLeonSticker = useMemo(() => ({
@@ -142,21 +132,6 @@ export function Store() {
     $createdAt: new Date().toISOString(),
     $updatedAt: new Date().toISOString()
   }), []);
-
-  // Create a map to count sticker quantities
-
-  const retryOperation = async <T,>(operation: () => Promise<T>, maxAttempts = 3, delay = 1000): Promise<T> => {
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        return await operation();
-      } catch (error) {
-        if (attempt === maxAttempts) throw error;
-        console.log(`Attempt ${attempt} failed, retrying in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-    throw new Error('Operation failed after all attempts');
-  };
 
   const openBoosterPack = useCallback(async () => {
     const totalCost = BOOSTER_PACK_COST * packCount;
@@ -244,11 +219,6 @@ export function Store() {
 
     } catch (error) {
       console.error('Error opening booster pack:', error);
-      console.error('Error details:', {
-        error,
-        stack: error.stack,
-        message: error.message
-      });
       alert('Failed to update preferences. Please try again.');
     } finally {
       setIsOpening(false);
