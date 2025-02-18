@@ -45,19 +45,23 @@ export function Store() {
       if (soundsLoaded) return;
 
       try {
+        console.log('Loading sticker sounds...');
         for (const [stickerName, soundFile] of Object.entries(STICKER_SOUND_MAP)) {
           try {
+            console.log(`Loading sound for ${stickerName}: ${soundFile}`);
             const soundUrl = storage.getFileView(AUDIO_BUCKET_ID, soundFile);
             const audio = new Audio(soundUrl.toString());
             
             stickerSounds.current[stickerName] = audio;
             
             await audio.load();
+            console.log(`Successfully loaded sound for ${stickerName}`);
           } catch (error) {
             console.error(`Failed to load sound for ${stickerName}:`, error);
           }
         }
         setSoundsLoaded(true);
+        console.log('All sounds loaded:', Object.keys(stickerSounds.current));
       } catch (error) {
         console.error('Error loading sticker sounds:', error);
       }
@@ -67,15 +71,19 @@ export function Store() {
   }, [soundsLoaded]);
 
   const playStickersSequentially = useCallback(async (stickers: string[]) => {
+    console.log('Playing stickers:', stickers);
     for (const stickerName of stickers) {
+      console.log('Checking sticker:', stickerName, 'Sound mapping:', STICKER_SOUND_MAP[stickerName]);
       if (STICKER_SOUND_MAP[stickerName]) {
         await new Promise<void>((resolve) => {
           const audio = stickerSounds.current[stickerName];
+          console.log('Audio object:', audio);
           if (audio) {
             setPlayingSticker(stickerName);
             audio.currentTime = 0;
             audio.volume = volume;
             audio.onended = () => {
+              console.log('Audio ended');
               setPlayingSticker(null);
               resolve();
             };
@@ -85,6 +93,7 @@ export function Store() {
               resolve();
             });
           } else {
+            console.log('No audio found for sticker');
             resolve();
           }
         });
@@ -126,9 +135,6 @@ export function Store() {
     const count = stickerFile ? (unlockedStickers[stickerFile.name] || 0) : 0;
     return count > 0;
   }, [stickers, unlockedStickers]);
-
-  // First verify this is the correct ID from your Appwrite storage
-  const MICRO_LEON_ID = '67b42a07002bcce132ca';
 
   const microLeonSticker = useMemo(() => ({
     $id: MICRO_LEON_STICKER_ID,
@@ -303,6 +309,12 @@ export function Store() {
                   key={sticker.$id}
                   className="flex flex-col items-center gap-2"
                   onClick={() => {
+                    console.log('Sticker clicked:', {
+                      name: sticker.name,
+                      isUnlocked,
+                      hasSound: !!STICKER_SOUND_MAP[sticker.name],
+                      playingSticker
+                    });
                     if (isUnlocked && STICKER_SOUND_MAP[sticker.name]) {
                       playStickersSequentially([sticker.name]);
                     }
@@ -358,7 +370,7 @@ export function Store() {
     );
     
     return GridComponent;
-  }, [checkIfUnlocked, unlockedStickers, playStickersSequentially]);
+  }, [checkIfUnlocked, unlockedStickers, playStickersSequentially, playingSticker]);
 
   if (isLoading) {
     return <div>Loading stickers...</div>;
