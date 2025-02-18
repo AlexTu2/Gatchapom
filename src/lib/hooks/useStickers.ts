@@ -160,9 +160,15 @@ export function useStickers() {
     }
   };
 
+  const getStickerId = (stickerName: string) => {
+    const sticker = stickers.find(s => s.name === stickerName);
+    return sticker?.$id;
+  };
+
   return {
     stickers,
     isLoading,
-    getStickerUrl
+    getStickerUrl,
+    getStickerId
   };
 } 
