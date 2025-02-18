@@ -165,12 +165,6 @@ export function YouTubeAudioPlayer() {
       playerRef.current = null;
     }
 
-    const playerElement = document.getElementById('youtube-player');
-    if (!playerElement) {
-      console.error('Player element not found');
-      return;
-    }
-
     try {
       console.log('Creating new player instance');
       playerRef.current = new window.YT.Player('youtube-player', {
@@ -180,14 +174,11 @@ export function YouTubeAudioPlayer() {
         playerVars: {
           autoplay: 1,
           controls: 1,
-          disablekb: 0,
+          disablekb: 1,
           enablejsapi: 1,
-          loop: 0,
           modestbranding: 1,
           playsinline: 1,
-          rel: 0,
-          showinfo: 0,
-          mute: 0,
+          rel: 0
         },
         events: {
           onReady: (event: YouTubeEvent) => {
@@ -195,25 +186,10 @@ export function YouTubeAudioPlayer() {
             setIsPlayerReady(true);
             event.target.setVolume(Math.round(volume * 100));
             event.target.playVideo();
-            setDuration(event.target.getDuration());
-            startProgressTracking();
             setIsPlaying(true);
           },
           onStateChange: (event: YouTubeEvent) => {
-            console.log('Player state changed:', event.data);
-            switch (event.data) {
-              case window.YT.PlayerState.PLAYING:
-                setIsPlaying(true);
-                if (playerRef.current) {
-                  playerRef.current.setVolume(Math.round(volume * 100));
-                }
-                break;
-              case window.YT.PlayerState.PAUSED:
-              case window.YT.PlayerState.ENDED:
-                setIsPlaying(false);
-                break;
-            }
-            
+            setIsPlaying(event.data === window.YT.PlayerState.PLAYING);
             if (event.data === window.YT.PlayerState.ENDED) {
               handleNext();
             }
@@ -221,7 +197,6 @@ export function YouTubeAudioPlayer() {
           onError: (event: YouTubeEvent) => {
             console.error('YouTube player error:', event);
             setIsPlayerReady(false);
-            playerRef.current = null;
           }
         }
       });
@@ -367,6 +342,13 @@ export function YouTubeAudioPlayer() {
 
   const loadPresetPlaylist = async (preset: typeof PRESET_PLAYLISTS[0]) => {
     try {
+      // Stop any currently playing custom audio
+      if (customAudioRef.current) {
+        customAudioRef.current.pause();
+        customAudioRef.current.currentTime = 0;
+      }
+      setPlayingCollection(null);
+
       if (preset.id === 'mixed') {
         // Play custom audio for 100Devs Collection
         if (customAudioRef.current) {
@@ -381,6 +363,7 @@ export function YouTubeAudioPlayer() {
         }
       }
 
+      // Load videos regardless of custom audio
       if (preset.type === 'mixed') {
         const videos: VideoInfo[] = [];
         
@@ -494,67 +477,15 @@ export function YouTubeAudioPlayer() {
 
         {currentVideo && (
           <div className="space-y-4">
-            <div className="relative aspect-video rounded-lg overflow-hidden">
-              <img 
-                src={currentVideo.thumbnail}
-                alt={currentVideo.title}
-                className="w-full h-full object-cover"
-              />
+            <div className="relative aspect-video rounded-lg overflow-hidden bg-black">
               <div 
                 id="youtube-player"
-                className="absolute top-0 left-0 w-full h-full opacity-0"
+                className="w-full h-full"
               />
             </div>
             
             <div className="space-y-2">
               <h3 className="font-medium text-lg">{currentVideo.title}</h3>
-              
-              <div className="flex items-center gap-4 justify-center">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handlePrevious}
-                  disabled={currentIndex === 0}
-                >
-                  <SkipBack className="h-6 w-6" />
-                </Button>
-                
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handlePlayPause}
-                  disabled={!isPlayerReady}
-                >
-                  {isPlaying ? (
-                    <PauseCircle className="h-8 w-8" />
-                  ) : (
-                    <PlayCircle className="h-8 w-8" />
-                  )}
-                </Button>
-                
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleNext}
-                  disabled={currentIndex === playlist.length - 1}
-                >
-                  <SkipForward className="h-6 w-6" />
-                </Button>
-              </div>
-
-              <div className="space-y-2">
-                <Slider
-                  value={[progress]}
-                  onValueChange={handleSeek}
-                  max={100}
-                  step={0.1}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-sm text-gray-500">
-                  <span>{formatTime(duration * (progress / 100))}</span>
-                  <span>{formatTime(duration)}</span>
-                </div>
-              </div>
             </div>
           </div>
         )}
