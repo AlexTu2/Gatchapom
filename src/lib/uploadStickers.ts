@@ -1,30 +1,23 @@
-import { storage } from './appwrite';
+import { storage, databases } from './appwrite';
 import { ID, Permission, Role } from 'appwrite';
+import { type StickerMetadata } from './types/sticker';
 
-// Create a separate bucket ID for stickers
-export const STICKERS_BUCKET_ID = 'stickers'; // Replace with your actual stickers bucket ID
+// Add database and collection IDs
+export const STICKERS_BUCKET_ID = 'stickers';
+export const DATABASE_ID = 'idea-tracker'; // Replace with your database ID
+export const STICKER_METADATA_COLLECTION_ID = 'sticker_metadata'; // Replace with your collection ID
 
 const STICKER_PATHS = [
-    '/learnwithleon/learnw11job.png',
-    '/learnwithleon/learnw1Bob.png',
-    '/learnwithleon/learnw1Edu.png',
-    '/learnwithleon/learnw1End.png',
-    '/learnwithleon/learnw1First.png',
-    '/learnwithleon/learnw1Free.png',
-    '/learnwithleon/learnw1Getgot.png',
-    '/learnwithleon/learnw1Goget.png',
-    '/learnwithleon/learnw1Hypebob.png',
-    '/learnwithleon/learnw1Hypeleon.png',
-    '/learnwithleon/learnw1John.png',
-    '/learnwithleon/learnw1Leon.png',
-    '/learnwithleon/learnw1Nuns.png',
-    '/learnwithleon/learnw1Should.png',
-    '/learnwithleon/learnw1Smile.png',
-    '/learnwithleon/learnw1Spicy.png',
-    '/learnwithleon/learnw1Wedont.png',
-    '/learnwithleon/learnw1Wink.png',
-    '/learnwithleon/microLeon.png'
+    '/secret/test/4ball.png'
 ];
+
+// You might want to define which stickers go in which collection
+const STICKER_COLLECTION_MAP: Record<string, StickerMetadata['collection']> = {
+  '4ball.png': '100DevsDiscord',
+  'learnw1Wink.png': '100DevsTwitch',
+  'learnw1First.png': '100DevsTwitch',
+  // ... add mappings for all your stickers
+};
 
 export async function uploadStickers() {
   console.log('Starting sticker upload...');
@@ -45,7 +38,7 @@ export async function uploadStickers() {
       const file = new File([blob], filename, { type: 'image/png' });
       
       // Upload to Appwrite stickers bucket
-      await storage.createFile(
+      const fileUpload = await storage.createFile(
         STICKERS_BUCKET_ID,
         ID.unique(),
         file,
@@ -54,6 +47,18 @@ export async function uploadStickers() {
           Permission.write(Role.users()),
           Permission.delete(Role.users())
         ]
+      );
+      
+      // Create metadata entry in database
+      await databases.createDocument(
+        DATABASE_ID,
+        STICKER_METADATA_COLLECTION_ID,
+        ID.unique(),
+        {
+          fileId: fileUpload.$id,
+          fileName: filename,
+          collection: STICKER_COLLECTION_MAP[filename] || '100DevsTwitch'
+        }
       );
       
       console.log(`[SUCCESS] Uploaded ${filename}`);

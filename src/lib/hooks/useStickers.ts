@@ -1,16 +1,20 @@
-import { storage } from '../appwrite';
+import { storage, databases } from '../appwrite';
 import { useEffect, useState, useRef } from 'react';
-import { STICKERS_BUCKET_ID } from '../uploadStickers';
+import { STICKERS_BUCKET_ID, DATABASE_ID, STICKER_METADATA_COLLECTION_ID } from '../uploadStickers';
+import type { StickerMetadata } from '../types/sticker';
+import { Models } from 'appwrite';
+import type { StickerCollection } from '../config/stickerSounds';
+
+interface MetadataDocument {
+  fileId: string;
+  fileName: string;
+  collection: StickerCollection;
+}
 
 export function useStickers() {
   const [nameToId, setNameToId] = useState<Record<string, string>>({});
   const [idToName, setIdToName] = useState<Record<string, string>>({});
-  const [stickers, setStickers] = useState<{
-    $id: string;
-    name: string;
-    $createdAt: string;
-    $updatedAt: string;
-  }[]>([]);
+  const [stickers, setStickers] = useState<(Models.File & StickerMetadata)[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const loadedRef = useRef(false);
   const loggedRef = useRef(false); // New ref to track if we've logged
@@ -20,10 +24,27 @@ export function useStickers() {
     
     async function loadStickers() {
       try {
-        const response = await storage.listFiles(STICKERS_BUCKET_ID);
-        const stickerFiles = response.files.filter((file: { name: string; }) => 
-          file.name.endsWith('.png') || file.name.endsWith('.gif')
+        // Get metadata from database
+        const metadataResponse = await databases.listDocuments(
+          DATABASE_ID,
+          STICKER_METADATA_COLLECTION_ID
         );
+
+        // Create a map of fileId to metadata
+        const metadataMap = new Map(
+          metadataResponse.documents.map((doc: MetadataDocument) => [doc.fileId, doc])
+        );
+
+        // Get files from storage
+        const filesResponse = await storage.listFiles(STICKERS_BUCKET_ID);
+        
+        // Combine file data with metadata
+        const stickerFiles = filesResponse.files
+          .filter(file => file.name.endsWith('.png') || file.name.endsWith('.gif'))
+          .map(file => ({
+            ...file,
+            ...metadataMap.get(file.$id)
+          }));
 
         const newNameToId: Record<string, string> = {};
         const newIdToName: Record<string, string> = {};
