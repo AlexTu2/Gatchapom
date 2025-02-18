@@ -41,11 +41,29 @@ export function MusicProvider({ children }: { children: ReactNode }) {
 
     const initializePlayer = () => {
       playerRef.current = new window.YT.Player('youtube-player', {
+        height: '360',
+        width: '640',
         videoId: DEFAULT_VIDEO_ID,
+        playerVars: {
+          autoplay: 1,
+          controls: 1,
+          disablekb: 1,
+          enablejsapi: 1,
+          loop: 0,
+          modestbranding: 1,
+          playsinline: 1,
+          rel: 0,
+          showinfo: 0,
+          mute: 0
+        },
         events: {
           onReady: () => setIsReady(true),
           onStateChange: (event) => {
             setIsPlaying(event.data === window.YT.PlayerState.PLAYING);
+          },
+          onError: (event) => {
+            console.error('YouTube player error:', event);
+            setIsReady(false);
           }
         }
       });

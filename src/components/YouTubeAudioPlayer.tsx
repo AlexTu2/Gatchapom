@@ -3,8 +3,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useAudio } from '@/lib/context/audio';
-import { PlayCircle, PauseCircle, SkipForward, SkipBack } from 'lucide-react';
-import { Slider } from '@/components/ui/slider';
 import { getPlaylistVideos } from '@/lib/youtube';
 import { PRESET_PLAYLISTS } from '@/lib/playlists';
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -98,13 +96,8 @@ export function YouTubeAudioPlayer() {
   const [currentVideo, setCurrentVideo] = useState<VideoInfo | null>(null);
   const [playlist, setPlaylist] = useState<VideoInfo[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [isPlayerReady, setIsPlayerReady] = useState(false);
   const { volume } = useAudio();
   const playerRef = useRef<YouTubePlayer | null>(null);
-  const progressInterval = useRef<NodeJS.Timeout | null>(null);
   const [playingCollection, setPlayingCollection] = useState<string | null>(null);
   const customAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -119,9 +112,6 @@ export function YouTubeAudioPlayer() {
     return () => {
       if (playerRef.current) {
         playerRef.current.destroy();
-      }
-      if (progressInterval.current) {
-        clearInterval(progressInterval.current);
       }
     };
   }, []);
@@ -176,51 +166,32 @@ export function YouTubeAudioPlayer() {
           controls: 1,
           disablekb: 1,
           enablejsapi: 1,
+          loop: 0,
           modestbranding: 1,
           playsinline: 1,
-          rel: 0
+          rel: 0,
+          showinfo: 0,
+          mute: 0
         },
         events: {
           onReady: (event: YouTubeEvent) => {
             console.log('Player ready event fired');
-            setIsPlayerReady(true);
             event.target.setVolume(Math.round(volume * 100));
             event.target.playVideo();
-            setIsPlaying(true);
           },
           onStateChange: (event: YouTubeEvent) => {
-            setIsPlaying(event.data === window.YT.PlayerState.PLAYING);
             if (event.data === window.YT.PlayerState.ENDED) {
               handleNext();
             }
           },
           onError: (event: YouTubeEvent) => {
             console.error('YouTube player error:', event);
-            setIsPlayerReady(false);
           }
         }
       });
     } catch (error) {
       console.error('Error initializing YouTube player:', error);
     }
-  };
-
-  const startProgressTracking = () => {
-    if (progressInterval.current) {
-      clearInterval(progressInterval.current);
-    }
-
-    progressInterval.current = setInterval(() => {
-      if (playerRef.current) {
-        try {
-          const currentTime = playerRef.current.getCurrentTime();
-          const duration = playerRef.current.getDuration();
-          setProgress((currentTime / duration) * 100);
-        } catch (error) {
-          console.error('Error updating progress:', error);
-        }
-      }
-    }, 1000);
   };
 
   const fetchVideoTitle = async (videoId: string): Promise<string> => {
@@ -287,23 +258,6 @@ export function YouTubeAudioPlayer() {
     setUrl('');
   };
 
-  const handlePlayPause = () => {
-    console.log('Play/Pause clicked', { player: playerRef.current, isReady: isPlayerReady });
-    if (!playerRef.current || !isPlayerReady) return;
-    
-    try {
-      if (isPlaying) {
-        console.log('Pausing video');
-        playerRef.current.pauseVideo();
-      } else {
-        console.log('Playing video');
-        playerRef.current.playVideo();
-      }
-    } catch (error) {
-      console.error('Error controlling playback:', error);
-    }
-  };
-
   const handleNext = () => {
     if (currentIndex < playlist.length - 1) {
       const nextVideo = playlist[currentIndex + 1];
@@ -313,32 +267,11 @@ export function YouTubeAudioPlayer() {
     }
   };
 
-  const handlePrevious = () => {
-    if (currentIndex > 0) {
-      const prevVideo = playlist[currentIndex - 1];
-      setCurrentVideo(prevVideo);
-      setCurrentIndex(prev => prev - 1);
-      initializePlayer(prevVideo.id);
-    }
-  };
-
-  const handleSeek = (value: number[]) => {
-    if (!playerRef.current || !duration) return;
-    const newTime = (value[0] / 100) * duration;
-    playerRef.current.seekTo(newTime);
-  };
-
   useEffect(() => {
     if (playerRef.current) {
       playerRef.current.setVolume(Math.round(volume * 100));
     }
   }, [volume]);
-
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
 
   const loadPresetPlaylist = async (preset: typeof PRESET_PLAYLISTS[0]) => {
     try {
