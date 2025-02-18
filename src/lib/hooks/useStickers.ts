@@ -1,52 +1,143 @@
-import { storage } from '../appwrite';
+import { storage, databases } from '../appwrite';
+import { Query, type Models } from 'appwrite';
 import { useEffect, useState, useRef } from 'react';
-import { STICKERS_BUCKET_ID } from '../uploadStickers';
+import { STICKERS_BUCKET_ID, DATABASE_ID, STICKER_METADATA_COLLECTION_ID } from '../uploadStickers';
+import type { StickerCollection } from '../../config/stickerSounds';
+
+interface MetadataDocument {
+  $id: string;
+  $createdAt: string;
+  $updatedAt: string;
+  $permissions: string[];
+  $collectionId: string;
+  $databaseId: string;
+  fileId: string;
+  fileName: string;
+  pack: StickerCollection;
+  soundFileId?: string;
+}
 
 export function useStickers() {
-  const [nameToId, setNameToId] = useState<Record<string, string>>({});
-  const [idToName, setIdToName] = useState<Record<string, string>>({});
-  const [stickers, setStickers] = useState<{
-    $id: string;
-    name: string;
-    $createdAt: string;
-    $updatedAt: string;
-  }[]>([]);
+  const [stickers, setStickers] = useState<(Models.File & { pack?: StickerCollection })[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const loadedRef = useRef(false);
-  const loggedRef = useRef(false); // New ref to track if we've logged
 
   useEffect(() => {
     if (loadedRef.current) return;
     
     async function loadStickers() {
       try {
-        const response = await storage.listFiles(STICKERS_BUCKET_ID);
-        const stickerFiles = response.files.filter((file: { name: string; }) => 
-          file.name.endsWith('.png') || file.name.endsWith('.gif')
-        );
+        let allMetadataDocuments: MetadataDocument[] = [];
+        let metadataLastId: string | undefined;
+        const limit = 100;
+        
+        // Keep fetching until we get all documents
+        while (true) {
+          const queries = [Query.limit(limit)];
+          if (metadataLastId) {
+            queries.push(Query.cursorAfter(metadataLastId));
+          }
 
-        const newNameToId: Record<string, string> = {};
-        const newIdToName: Record<string, string> = {};
+          const metadataResponse = await databases.listDocuments<MetadataDocument>(
+            DATABASE_ID,
+            STICKER_METADATA_COLLECTION_ID,
+            queries
+          );
 
-        stickerFiles.forEach((file: { name: string; $id: string; }) => {
-          const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
-          newNameToId[file.name] = file.$id;
-          newNameToId[nameWithoutExt] = file.$id;
-          newIdToName[file.$id] = nameWithoutExt;
+          allMetadataDocuments = [...allMetadataDocuments, ...metadataResponse.documents];
+          
+          console.log(`Fetched batch: size=${metadataResponse.documents.length}, total=${allMetadataDocuments.length}`);
+          
+          if (metadataResponse.documents.length < limit) {
+            // We've got all documents
+            break;
+          }
+          
+          // Get the last document's ID for the next query
+          metadataLastId = metadataResponse.documents[metadataResponse.documents.length - 1].$id;
+        }
+
+        console.log('Raw metadata response:', {
+          total: allMetadataDocuments.length,
+          documents: allMetadataDocuments.map(doc => ({
+            fileId: doc.fileId,
+            fileName: doc.fileName,
+            pack: doc.pack
+          }))
         });
 
-        setNameToId(newNameToId);
-        setIdToName(newIdToName);
+        // Get all files from storage with pagination
+        let allFiles: Models.File[] = [];
+        let filesLastId: string | undefined;
+        
+        while (true) {
+          const queries = [Query.limit(limit)];
+          if (filesLastId) {
+            queries.push(Query.cursorAfter(filesLastId));
+          }
+
+          const filesResponse = await storage.listFiles(
+            STICKERS_BUCKET_ID,
+            queries
+          );
+
+          console.log('Files batch:', {
+            size: filesResponse.files.length,
+            lastId: filesLastId
+          });
+
+          allFiles = [...allFiles, ...filesResponse.files];
+          
+          if (filesResponse.files.length < limit) {
+            break;
+          }
+          
+          filesLastId = filesResponse.files[filesResponse.files.length - 1].$id;
+        }
+
+        console.log('All files loaded:', {
+          total: allFiles.length,
+          files: allFiles.map(f => ({
+            id: f.$id,
+            name: f.name
+          }))
+        });
+
+        // Create metadata map
+        const metadataMap = new Map(
+          allMetadataDocuments.map(doc => [doc.fileId, {
+            pack: doc.pack,
+            fileName: doc.fileName,
+            soundFileId: doc.soundFileId
+          }])
+        );
+
+        // Combine file data with metadata using all files
+        const stickerFiles = allFiles
+          .filter(file => file.name.endsWith('.png') || file.name.endsWith('.gif'))
+          .map(file => {
+            const metadata = metadataMap.get(file.$id);
+            return {
+              ...file,
+              pack: metadata?.pack || '100DevsTwitch' // Default to Twitch if no pack specified
+            };
+          });
+
         setStickers(stickerFiles);
         
-        // Log only once in development
-        if (process.env.NODE_ENV === 'development' && !loggedRef.current) {
-          console.debug('Sticker mappings loaded:', {
-            count: stickerFiles.length,
-            stickers: stickerFiles.map((s: { name: string; }) => s.name)
-          });
-          loggedRef.current = true;
-        }
+        // Debug log the final mapping
+        console.log('Final sticker mapping:', {
+          total: stickerFiles.length,
+          byPack: {
+            twitch: stickerFiles.filter(s => s.pack === '100DevsTwitch').length,
+            discord: stickerFiles.filter(s => s.pack === '100DevsDiscord').length,
+            undefined: stickerFiles.filter(s => !s.pack).length
+          },
+          stickers: stickerFiles.map(s => ({
+            name: s.name,
+            pack: s.pack || 'undefined'
+          }))
+        });
 
       } catch (error) {
         console.error('Error loading stickers:', error);
@@ -59,32 +150,25 @@ export function useStickers() {
     loadStickers();
   }, []);
 
-  const getStickerId = (name: string) => {
-    if (isLoading) return undefined;
-    const baseName = name.replace('.png', '');
-    return nameToId[name] || nameToId[baseName];
-  };
-
-  const getStickerUrl = (nameOrId: string) => {
+  const getStickerUrl = (fileId: string) => {
     try {
-      const fileId = nameToId[nameOrId] || nameOrId;
       const url = storage.getFileView(STICKERS_BUCKET_ID, fileId);
-      return url.toString();  // Convert URL to string
+      return url.toString();
     } catch (error) {
       console.error('Failed to get sticker URL:', error);
       return '/fallback-sticker.png';
     }
   };
 
-  const getStickerName = (fileId: string) => {
-    return idToName[fileId];
+  const getStickerId = (stickerName: string) => {
+    const sticker = stickers.find(s => s.name === stickerName);
+    return sticker?.$id;
   };
 
   return {
     stickers,
     isLoading,
     getStickerUrl,
-    getStickerName,
     getStickerId
   };
 } 

@@ -1,0 +1,1 @@
+export const MICRO_LEON_STICKER_ID = '67b42a07002bcce132ca'; 

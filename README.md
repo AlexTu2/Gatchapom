@@ -1,50 +1,41 @@
-# React + TypeScript + Vite
+# GatchaPom 🍅✨
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A gamified Pomodoro timer that rewards your focus time with collectible stickers! Combine productivity with the fun of gatchapon mechanics.
 
-Currently, two official plugins are available:
+## Features 🌟
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Pomodoro Timer**: 
+  - Customizable work/break cycles (default 25/5/15 minutes)
+  - Long break intervals after 4 cycles
+  - Visual and audio notifications
+  - Background timer tracking
+  - Built-in YouTube player featuring ChrisPNugget's beats
+  - Leon's sound bites when unlocking certain stickers
 
-## Expanding the ESLint configuration
+- **Gacha Store**: 
+  - Earn Micro Leons through completed sessions
+  - Buy and open sticker packs with animated experience
+  - Track your collection progress
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+- **Sticker Collections**:
+  - 100 Devs themed stickers (Twitch & Discord)
+  - Use stickers in chat messages
 
-- Configure the top-level `parserOptions` property like this:
+- **User Features**:
+  - Secure authentication
+  - Customizable profiles
+  - Saved preferences and collections
 
-```js
-export default tseslint.config({
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
+## Tech Stack 🛠
 
-- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
-- Optionally add `...tseslint.configs.stylisticTypeChecked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and update the config:
+- **Frontend**: React, TypeScript, Tailwind CSS, Radix UI, Framer Motion
+- **Backend**: Appwrite (Auth, Database, Storage, Cloud Functions)
+- **Development**: Vite, ESLint, Node.js
 
-```js
-// eslint.config.js
-import react from 'eslint-plugin-react'
+## Acknowledgments 🙏
 
-export default tseslint.config({
-  // Set the react version
-  settings: { react: { version: '18.3' } },
-  plugins: {
-    // Add the react plugin
-    react,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended rules
-    ...react.configs.recommended.rules,
-    ...react.configs['jsx-runtime'].rules,
-  },
-})
-```
+Built during the 100Devs mini hackathon, inspired by the Pomodoro Technique. Special thanks to Appwrite, our community sticker contributors, and ChrisPNugget for the amazing music.
+
+---
+
+Made with ❤️ by Alex Tu
