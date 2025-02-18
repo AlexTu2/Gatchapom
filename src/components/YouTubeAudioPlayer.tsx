@@ -52,6 +52,7 @@ declare global {
             rel: number;
             showinfo: number;
             mute: number;
+            origin: string;
           };
           events: {
             onReady: (event: YouTubeEvent) => void;
@@ -96,10 +97,16 @@ export function YouTubeAudioPlayer() {
   const [currentVideo, setCurrentVideo] = useState<VideoInfo | null>(null);
   const [playlist, setPlaylist] = useState<VideoInfo[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const currentIndexRef = useRef(0);
   const { volume } = useAudio();
   const playerRef = useRef<YouTubePlayer | null>(null);
   const [playingCollection, setPlayingCollection] = useState<string | null>(null);
   const customAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
 
   useEffect(() => {
     loadYouTubeAPI().then(() => {
@@ -149,10 +156,17 @@ export function YouTubeAudioPlayer() {
       return;
     }
 
+    // Clean up existing player
     if (playerRef.current) {
       console.log('Destroying existing player');
       playerRef.current.destroy();
       playerRef.current = null;
+    }
+
+    // Clear the container
+    const container = document.getElementById('youtube-player');
+    if (container) {
+      container.innerHTML = '';
     }
 
     try {
@@ -171,7 +185,8 @@ export function YouTubeAudioPlayer() {
           playsinline: 1,
           rel: 0,
           showinfo: 0,
-          mute: 0
+          mute: 0,
+          origin: window.location.origin // Add origin to prevent CORS issues
         },
         events: {
           onReady: (event: YouTubeEvent) => {
@@ -180,17 +195,46 @@ export function YouTubeAudioPlayer() {
             event.target.playVideo();
           },
           onStateChange: (event: YouTubeEvent) => {
-            if (event.data === window.YT.PlayerState.ENDED) {
+            const state = event.data;
+            console.log('Player state changed:', {
+              state,
+              stateName: getPlayerStateName(state),
+              currentRefIndex: currentIndexRef.current,
+              playlistLength: playlist.length
+            });
+            
+            if (state === window.YT.PlayerState.ENDED && !isTransitioning) {
+              console.log('Video ended, current index:', currentIndexRef.current);
+              setIsTransitioning(true);
               handleNext();
+              setTimeout(() => {
+                setIsTransitioning(false);
+              }, 1000);
             }
           },
           onError: (event: YouTubeEvent) => {
             console.error('YouTube player error:', event);
+            // Add a small delay before calling handleNext on error
+            setTimeout(() => {
+              handleNext();
+            }, 100);
           }
         }
       });
     } catch (error) {
       console.error('Error initializing YouTube player:', error);
+    }
+  };
+
+  const getPlayerStateName = (state: number): string => {
+    switch (state) {
+      case -1: return 'UNSTARTED';
+      case 0: return 'ENDED';
+      case 1: return 'PLAYING';
+      case 2: return 'PAUSED';
+      case 3: return 'BUFFERING';
+      case 5: return 'CUED';
+      default: return `UNKNOWN(${state})`;
     }
   };
 
@@ -259,12 +303,57 @@ export function YouTubeAudioPlayer() {
   };
 
   const handleNext = () => {
-    if (currentIndex < playlist.length - 1) {
-      const nextVideo = playlist[currentIndex + 1];
-      setCurrentVideo(nextVideo);
-      setCurrentIndex(prev => prev + 1);
+    if (playlist.length === 0) {
+      console.log('Playlist is empty, cannot play next');
+      return;
+    }
+
+    // Use the ref value instead of state
+    const nextIndex = (currentIndexRef.current + 1) % playlist.length;
+    console.log('Next index calculation:', {
+      currentRefIndex: currentIndexRef.current,
+      calculatedNextIndex: nextIndex,
+      playlistLength: playlist.length
+    });
+    
+    const nextVideo = playlist[nextIndex];
+    if (!nextVideo) {
+      console.error('Next video not found in playlist');
+      return;
+    }
+
+    // Update both state and ref
+    setCurrentIndex(nextIndex);
+    currentIndexRef.current = nextIndex;
+    setCurrentVideo(nextVideo);
+    
+    if (window.YT && window.YT.Player) {
+      console.log('Playing next video:', nextVideo.title);
       initializePlayer(nextVideo.id);
     }
+  };
+
+  const handleVideoClick = (video: VideoInfo, index: number) => {
+    if (isTransitioning) {
+      console.log('Ignoring click while transitioning');
+      return;
+    }
+
+    console.log('Video clicked:', {
+      clickedIndex: index,
+      currentRefIndex: currentIndexRef.current,
+      videoTitle: video.title
+    });
+    
+    setIsTransitioning(true);
+    setCurrentVideo(video);
+    setCurrentIndex(index);
+    currentIndexRef.current = index; // Update ref immediately
+    initializePlayer(video.id);
+    
+    setTimeout(() => {
+      setIsTransitioning(false);
+    }, 1000);
   };
 
   useEffect(() => {
@@ -434,11 +523,7 @@ export function YouTubeAudioPlayer() {
                     className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer hover:bg-gray-100 ${
                       index === currentIndex ? 'bg-gray-100' : ''
                     }`}
-                    onClick={() => {
-                      setCurrentVideo(video);
-                      setCurrentIndex(index);
-                      initializePlayer(video.id);
-                    }}
+                    onClick={() => handleVideoClick(video, index)}
                   >
                     <img
                       src={video.thumbnail}

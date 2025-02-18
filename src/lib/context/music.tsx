@@ -54,7 +54,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
           playsinline: 1,
           rel: 0,
           showinfo: 0,
-          mute: 0
+          mute: 0,
+          origin: window.location.origin
         },
         events: {
           onReady: () => setIsReady(true),
