@@ -2,7 +2,7 @@ import { storage, databases } from '../appwrite';
 import { Query, type Models } from 'appwrite';
 import { useEffect, useState, useRef } from 'react';
 import { STICKERS_BUCKET_ID, DATABASE_ID, STICKER_METADATA_COLLECTION_ID } from '../uploadStickers';
-import type { StickerCollection } from '../config/stickerSounds';
+import type { StickerCollection } from '../../config/stickerSounds';
 
 interface MetadataDocument {
   $id: string;
