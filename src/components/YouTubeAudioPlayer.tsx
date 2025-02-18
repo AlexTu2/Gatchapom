@@ -340,41 +340,57 @@ export function YouTubeAudioPlayer() {
   const loadPresetPlaylist = async (preset: typeof PRESET_PLAYLISTS[0]) => {
     try {
       if (preset.type === 'mixed') {
-        // Handle mixed collection
         const videos: VideoInfo[] = [];
+        
         // Load individual videos
         for (const videoId of preset.content?.videos || []) {
-          const title = await fetchVideoTitle(videoId);
-          videos.push({
-            id: videoId,
-            title,
-            thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
-          });
-        }
-        // Load videos from playlists
-        for (const playlistId of preset.content?.playlists || []) {
-          const playlistVideos = await getPlaylistVideos(playlistId);
-          videos.push(...playlistVideos);
+          try {
+            const title = await fetchVideoTitle(videoId);
+            videos.push({
+              id: videoId,
+              title,
+              thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
+            });
+          } catch (error) {
+            console.warn(`Video ${videoId} unavailable, skipping:`, error);
+            continue;
+          }
         }
 
-        setPlaylist(videos);
-        if (videos.length > 0) {
-          setCurrentVideo(videos[0]);
-          setCurrentIndex(0);
-          if (window.YT && window.YT.Player) {
-            initializePlayer(videos[0].id);
+        // Load videos from playlists
+        for (const playlistId of preset.content?.playlists || []) {
+          try {
+            const playlistVideos = await getPlaylistVideos(playlistId);
+            videos.push(...playlistVideos);
+          } catch (error) {
+            console.warn(`Playlist ${playlistId} unavailable, skipping:`, error);
+            continue;
           }
         }
-      } else {
-        // Handle regular playlist
-        const videos = await getPlaylistVideos(preset.id);
-        setPlaylist(videos);
+
         if (videos.length > 0) {
+          setPlaylist(videos);
           setCurrentVideo(videos[0]);
           setCurrentIndex(0);
           if (window.YT && window.YT.Player) {
             initializePlayer(videos[0].id);
           }
+        } else {
+          console.warn('No available videos found in preset');
+        }
+      } else {
+        try {
+          const videos = await getPlaylistVideos(preset.id);
+          if (videos.length > 0) {
+            setPlaylist(videos);
+            setCurrentVideo(videos[0]);
+            setCurrentIndex(0);
+            if (window.YT && window.YT.Player) {
+              initializePlayer(videos[0].id);
+            }
+          }
+        } catch (error) {
+          console.warn(`Playlist ${preset.id} unavailable:`, error);
         }
       }
     } catch (error) {
