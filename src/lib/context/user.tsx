@@ -194,7 +194,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Only include the essential preference fields
       const initialPrefs = {
         avatarUrl: null,
-        microLeons: "0",
+        microLeons: "1000",
         unlockedStickers: "[]",
         timerSettings: JSON.stringify(defaultTimerSettings),
         volume: "0.5"
