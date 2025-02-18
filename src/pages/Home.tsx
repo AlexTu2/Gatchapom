@@ -715,15 +715,17 @@ export function Home() {
               mass: 0.5       // Lighter mass for quicker response
             }}
           >
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-2xl font-bold">Pomodoro Timer</CardTitle>
+            <Card className="max-w-2xl mx-auto">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                <CardTitle className="text-2xl font-bold">
+                  Pomodoro Timer
+                </CardTitle>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setIsDevMode(!isDevMode)}
-                    className="text-xs"
+                    className="text-muted-foreground hover:text-foreground"
                   >
                     {isDevMode ? '🐛 Dev' : '⏰ Normal'}
                   </Button>
@@ -731,76 +733,114 @@ export function Home() {
                     variant="ghost"
                     size="sm"
                     onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                    className="text-muted-foreground hover:text-foreground"
                   >
                     ⚙️ Settings
                   </Button>
                 </div>
               </CardHeader>
+              
               <CardContent>
                 {isSettingsOpen ? (
-                  <div className="space-y-4">
-                    {Object.entries(settings).map(([key, value]) => (
-                      key !== 'currentMode' && (
-                        <div key={key} className="flex flex-col space-y-2">
-                          <Label htmlFor={key}>
-                            {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} 
-                            Duration ({isDevMode ? 'seconds' : 'minutes'})
-                          </Label>
-                          <Input
-                            id={key}
-                            type="number"
-                            min="1"
-                            max={isDevMode ? 300 : 60}
-                            value={value}
-                            onChange={(e) => {
-                              const newValue = parseInt(e.target.value);
-                              const maxValue = isDevMode ? 300 : 60;
-                              if (newValue > 0 && newValue <= maxValue) {
-                                const newSettings = { ...settings, [key]: newValue };
-                                setSettings(newSettings);
-                              }
-                            }}
-                          />
-                        </div>
-                      )
-                    ))}
-                    <Button 
-                      className="w-full mt-4"
-                      onClick={() => {
-                        setSettings(settings);
-                        setIsSettingsOpen(false);
-                      }}
-                    >
-                      Save Settings
-                    </Button>
+                  // Settings Panel
+                  <div className="space-y-6">
+                    <div className="grid gap-4">
+                      {Object.entries(settings).map(([key, value]) => (
+                        key !== 'currentMode' && (
+                          <div key={key} className="space-y-2">
+                            <Label 
+                              htmlFor={key}
+                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                            >
+                              {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} 
+                              <span className="text-muted-foreground ml-1">
+                                ({isDevMode ? 'seconds' : 'minutes'})
+                              </span>
+                            </Label>
+                            <Input
+                              id={key}
+                              type="number"
+                              min="1"
+                              max={isDevMode ? 300 : 60}
+                              value={value}
+                              onChange={(e) => {
+                                const newValue = parseInt(e.target.value);
+                                const maxValue = isDevMode ? 300 : 60;
+                                if (newValue > 0 && newValue <= maxValue) {
+                                  setSettings({ ...settings, [key]: newValue });
+                                }
+                              }}
+                              className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors"
+                            />
+                          </div>
+                        )
+                      ))}
+                    </div>
+                    <div className="flex justify-end space-x-2">
+                      <Button 
+                        variant="outline"
+                        onClick={() => setIsSettingsOpen(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button 
+                        onClick={() => {
+                          setSettings(settings);
+                          setIsSettingsOpen(false);
+                        }}
+                        variant="default"
+                      >
+                        Save Settings
+                      </Button>
+                    </div>
                   </div>
                 ) : (
-                  <div className="space-y-6">
-                    <div className="flex justify-center space-x-4">
+                  // Timer Display
+                  <div className="space-y-8">
+                    {/* Mode Selection Buttons */}
+                    <div className="flex justify-center gap-2">
                       {(['work', 'shortBreak', 'longBreak'] as TimerMode[]).map((timerMode) => (
                         <Button
                           key={timerMode}
                           onClick={() => handleModeChange(timerMode)}
                           variant={mode === timerMode ? "default" : "outline"}
+                          className={cn(
+                            "min-w-[120px] transition-all duration-200",
+                            mode === timerMode && "shadow-md",
+                            mode === 'work' && timerMode === 'work' && "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+                            mode === 'shortBreak' && timerMode === 'shortBreak' && "bg-emerald-500 text-white hover:bg-emerald-600",
+                            mode === 'longBreak' && timerMode === 'longBreak' && "bg-blue-500 text-white hover:bg-blue-600"
+                          )}
                         >
                           {timerMode.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
                         </Button>
                       ))}
                     </div>
 
+                    {/* Timer Display */}
                     <div className="text-center">
-                      <div className={`text-6xl font-bold mb-8 rounded-lg p-8 ${
-                        mode === 'work' ? 'bg-red-500' :
-                        mode === 'shortBreak' ? 'bg-green-500' : 'bg-blue-500'
-                      } bg-opacity-10`}>
+                      <div className={cn(
+                        "text-7xl font-bold mb-8 p-12 rounded-2xl transition-all duration-300",
+                        "font-mono tracking-tight",
+                        "shadow-lg backdrop-blur-sm",
+                        mode === 'work' && "bg-red-500/10 text-red-500",
+                        mode === 'shortBreak' && "bg-green-500/10 text-green-500",
+                        mode === 'longBreak' && "bg-blue-500/10 text-blue-500"
+                      )}>
                         {formatTime(timeLeft)}
                       </div>
 
-                      <div className="space-x-4">
+                      {/* Control Buttons */}
+                      <div className="flex justify-center gap-4">
                         <Button
                           onClick={toggleTimer}
                           variant="default"
                           size="lg"
+                          className={cn(
+                            "min-w-[120px] transition-all duration-200",
+                            isRunning ? "bg-orange-500 hover:bg-orange-600" : "bg-green-500 hover:bg-green-600",
+                            "shadow-lg"
+                          )}
                         >
                           {isRunning ? 'Pause' : 'Start'}
                         </Button>
@@ -808,13 +848,20 @@ export function Home() {
                           onClick={resetTimer}
                           variant="outline"
                           size="lg"
+                          className="min-w-[120px] hover:bg-destructive hover:text-destructive-foreground"
                         >
                           Reset
                         </Button>
                       </div>
 
-                      <div className="mt-6 text-sm text-gray-600">
-                        Completed Pomodoros: {completedPomodoros}
+                      {/* Progress Display */}
+                      <div className="mt-8 flex items-center justify-center gap-2">
+                        <span className="text-sm text-muted-foreground">
+                          Completed Pomodoros:
+                        </span>
+                        <span className="text-sm font-medium bg-accent/10 px-2 py-1 rounded">
+                          {completedPomodoros}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -922,28 +969,33 @@ export function Home() {
       </div>
 
       <Dialog open={showCompletionDialog} onOpenChange={setShowCompletionDialog}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Pomodoro Complete!</DialogTitle>
-            <DialogDescription asChild>
-              <div className="space-y-2">
-                <div>Great job! You've completed a work session.</div>
-                <div className="font-medium text-yellow-600 flex items-center gap-2">
-                  {microLeonSticker && (
-                    <img 
-                      src={getStickerUrl(microLeonSticker.$id)}
-                      alt="Micro Leon" 
-                      className="h-16 w-16"
-                    />
-                  )}
+            <DialogTitle className="text-2xl font-bold text-center bg-gradient-to-r from-green-500 to-emerald-500 bg-clip-text text-transparent">
+              Pomodoro Complete! 🎉
+            </DialogTitle>
+            <DialogDescription className="text-center space-y-4 pt-4">
+              <div className="text-lg font-medium">Great job! You've completed a work session.</div>
+              <div className="font-medium text-yellow-500 dark:text-yellow-400 flex items-center justify-center gap-3 p-4 bg-yellow-50 dark:bg-yellow-950/30 rounded-lg">
+                {microLeonSticker && (
+                  <img 
+                    src={getStickerUrl(microLeonSticker.$id)}
+                    alt="Micro Leon" 
+                    className="h-16 w-16 animate-bounce"
+                  />
+                )}
+                <span className="text-lg">
                   You earned {completedPomodoros % settings.longBreakInterval === 0 ? '50' : '10'} micro leons!
-                </div>
+                </span>
               </div>
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end">
-            <Button onClick={handleCompletionDismiss}>
-              Close
+          <div className="flex justify-center mt-4">
+            <Button 
+              onClick={handleCompletionDismiss}
+              className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-lg"
+            >
+              Continue
             </Button>
           </div>
         </DialogContent>
