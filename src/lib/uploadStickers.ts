@@ -1,42 +1,38 @@
 import { storage, databases } from './appwrite';
 import { ID, Permission, Role } from 'appwrite';
-import { type StickerMetadata } from './types/sticker';
+import { STICKER_SOUND_MAP } from '../config/stickerSounds';
 
-// Add database and collection IDs
+// Constants
 export const STICKERS_BUCKET_ID = 'stickers';
-export const DATABASE_ID = 'idea-tracker'; // Replace with your database ID
-export const STICKER_METADATA_COLLECTION_ID = 'sticker_metadata'; // Replace with your collection ID
+export const DATABASE_ID = 'idea-tracker';
+export const STICKER_METADATA_COLLECTION_ID = 'sticker_metadata';
 
-const STICKER_PATHS = [
-    '/secret/test/4ball.png'
-];
+export async function uploadStickers(files: File[]) {
+  console.log('Received files in uploadStickers:', files); // Debug log
+  
+  // Input validation with more detailed error
+  if (!files) {
+    throw new Error('Files parameter is undefined');
+  }
+  
+  if (!Array.isArray(files)) {
+    throw new Error(`Expected array of files, got ${typeof files}`);
+  }
+  
+  if (files.length === 0) {
+    throw new Error('No files provided (empty array)');
+  }
 
-// You might want to define which stickers go in which collection
-const STICKER_COLLECTION_MAP: Record<string, StickerMetadata['collection']> = {
-  '4ball.png': '100DevsDiscord',
-  'learnw1Wink.png': '100DevsTwitch',
-  'learnw1First.png': '100DevsTwitch',
-  // ... add mappings for all your stickers
-};
-
-export async function uploadStickers() {
   console.log('Starting sticker upload...');
   let successCount = 0;
   let failCount = 0;
 
-  for (const path of STICKER_PATHS) {
+  // Filter for PNG files
+  const pngFiles = files.filter(file => file.name.toLowerCase().endsWith('.png'));
+  console.log(`Found ${pngFiles.length} PNG files`);
+
+  for (const file of pngFiles) {
     try {
-      // Fetch the sticker file
-      const response = await fetch(path);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const blob = await response.blob();
-      
-      // Create a File object from the blob
-      const filename = path.split('/').pop()!;
-      const file = new File([blob], filename, { type: 'image/png' });
-      
       // Upload to Appwrite stickers bucket
       const fileUpload = await storage.createFile(
         STICKERS_BUCKET_ID,
@@ -49,22 +45,23 @@ export async function uploadStickers() {
         ]
       );
       
-      // Create metadata entry in database
+      // Create metadata entry in database with explicit null for soundFileId
       await databases.createDocument(
         DATABASE_ID,
         STICKER_METADATA_COLLECTION_ID,
         ID.unique(),
         {
           fileId: fileUpload.$id,
-          fileName: filename,
-          collection: STICKER_COLLECTION_MAP[filename] || '100DevsTwitch'
+          fileName: file.name,
+          pack: '100DevsTwitch',
+          soundFileId: STICKER_SOUND_MAP[file.name] ?? null // Use nullish coalescing
         }
       );
       
-      console.log(`[SUCCESS] Uploaded ${filename}`);
+      console.log(`[SUCCESS] Uploaded ${file.name}`);
       successCount++;
     } catch (error) {
-      console.error(`[ERROR] Failed to upload ${path}:`, error);
+      console.error(`[ERROR] Failed to upload ${file.name}:`, error);
       failCount++;
     }
   }
@@ -73,6 +70,6 @@ export async function uploadStickers() {
 Upload complete!
 Successfully uploaded: ${successCount}
 Failed: ${failCount}
-Total files: ${STICKER_PATHS.length}
+Total files: ${pngFiles.length}
   `);
 }

@@ -13,6 +13,7 @@ interface MetadataDocument {
   fileId: string;
   fileName: string;
   pack: string;
+  soundFileId?: string;
 }
 
 export function useStickers() {

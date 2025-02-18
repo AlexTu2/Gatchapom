@@ -226,15 +226,32 @@ export function Store() {
   }, [user, microLeons, stickers, packCount, selectedPack, playStickersSequentially]);
 
   const handleUpload = async () => {
-    if (isUploading) return;
-    setIsUploading(true);
-    try {
-      await uploadStickers();
-    } catch (error) {
-      console.error('Upload failed:', error);
-    } finally {
-      setIsUploading(false);
-    }
+    // Create a hidden file input
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.accept = '.png';
+
+    input.onchange = async (e) => {
+      if (!e.target || !(e.target as HTMLInputElement).files) return;
+      
+      const files = Array.from((e.target as HTMLInputElement).files!);
+      console.log('Files selected:', files);
+
+      if (isUploading) return;
+      setIsUploading(true);
+      
+      try {
+        await uploadStickers(files);
+      } catch (error) {
+        console.error('Upload failed:', error);
+      } finally {
+        setIsUploading(false);
+      }
+    };
+
+    // Trigger file selection
+    input.click();
   };
 
   // Handle dialog close
