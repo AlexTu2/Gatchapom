@@ -1,7 +1,8 @@
 import { storage, databases } from '../appwrite';
+import { Query, type Models } from 'appwrite';
 import { useEffect, useState, useRef } from 'react';
 import { STICKERS_BUCKET_ID, DATABASE_ID, STICKER_METADATA_COLLECTION_ID } from '../uploadStickers';
-import type { Models } from 'appwrite';
+import type { StickerCollection } from '../config/stickerSounds';
 
 interface MetadataDocument {
   $id: string;
@@ -12,52 +13,131 @@ interface MetadataDocument {
   $databaseId: string;
   fileId: string;
   fileName: string;
-  pack: string;
+  pack: StickerCollection;
   soundFileId?: string;
 }
 
 export function useStickers() {
-  const [stickers, setStickers] = useState<(Models.File & { pack?: string })[]>([]);
+  const [stickers, setStickers] = useState<(Models.File & { pack?: StickerCollection })[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const loadedRef = useRef(false);
-  const loggedRef = useRef(false);
 
   useEffect(() => {
     if (loadedRef.current) return;
     
     async function loadStickers() {
       try {
-        // Get metadata from database
-        const metadataResponse = await databases.listDocuments<MetadataDocument>(
-          DATABASE_ID,
-          STICKER_METADATA_COLLECTION_ID
-        );
-
-        // Create a map of fileId to metadata
-        const metadataMap = new Map(
-          metadataResponse.documents.map(doc => [doc.fileId, doc])
-        );
-
-        // Get files from storage
-        const filesResponse = await storage.listFiles(STICKERS_BUCKET_ID);
+        let allMetadataDocuments: MetadataDocument[] = [];
+        let metadataLastId: string | undefined;
+        const limit = 100;
         
-        // Combine file data with metadata
-        const stickerFiles = filesResponse.files
+        // Keep fetching until we get all documents
+        while (true) {
+          const queries = [Query.limit(limit)];
+          if (metadataLastId) {
+            queries.push(Query.cursorAfter(metadataLastId));
+          }
+
+          const metadataResponse = await databases.listDocuments<MetadataDocument>(
+            DATABASE_ID,
+            STICKER_METADATA_COLLECTION_ID,
+            queries
+          );
+
+          allMetadataDocuments = [...allMetadataDocuments, ...metadataResponse.documents];
+          
+          console.log(`Fetched batch: size=${metadataResponse.documents.length}, total=${allMetadataDocuments.length}`);
+          
+          if (metadataResponse.documents.length < limit) {
+            // We've got all documents
+            break;
+          }
+          
+          // Get the last document's ID for the next query
+          metadataLastId = metadataResponse.documents[metadataResponse.documents.length - 1].$id;
+        }
+
+        console.log('Raw metadata response:', {
+          total: allMetadataDocuments.length,
+          documents: allMetadataDocuments.map(doc => ({
+            fileId: doc.fileId,
+            fileName: doc.fileName,
+            pack: doc.pack
+          }))
+        });
+
+        // Get all files from storage with pagination
+        let allFiles: Models.File[] = [];
+        let filesLastId: string | undefined;
+        
+        while (true) {
+          const queries = [Query.limit(limit)];
+          if (filesLastId) {
+            queries.push(Query.cursorAfter(filesLastId));
+          }
+
+          const filesResponse = await storage.listFiles(
+            STICKERS_BUCKET_ID,
+            queries
+          );
+
+          console.log('Files batch:', {
+            size: filesResponse.files.length,
+            lastId: filesLastId
+          });
+
+          allFiles = [...allFiles, ...filesResponse.files];
+          
+          if (filesResponse.files.length < limit) {
+            break;
+          }
+          
+          filesLastId = filesResponse.files[filesResponse.files.length - 1].$id;
+        }
+
+        console.log('All files loaded:', {
+          total: allFiles.length,
+          files: allFiles.map(f => ({
+            id: f.$id,
+            name: f.name
+          }))
+        });
+
+        // Create metadata map
+        const metadataMap = new Map(
+          allMetadataDocuments.map(doc => [doc.fileId, {
+            pack: doc.pack,
+            fileName: doc.fileName,
+            soundFileId: doc.soundFileId
+          }])
+        );
+
+        // Combine file data with metadata using all files
+        const stickerFiles = allFiles
           .filter(file => file.name.endsWith('.png') || file.name.endsWith('.gif'))
-          .map(file => ({
-            ...file,
-            pack: metadataMap.get(file.$id)?.pack
-          }));
+          .map(file => {
+            const metadata = metadataMap.get(file.$id);
+            return {
+              ...file,
+              pack: metadata?.pack || '100DevsTwitch' // Default to Twitch if no pack specified
+            };
+          });
 
         setStickers(stickerFiles);
         
-        if (process.env.NODE_ENV === 'development' && !loggedRef.current) {
-          console.debug('Sticker mappings loaded:', {
-            count: stickerFiles.length,
-            stickers: stickerFiles.map(s => ({ name: s.name, pack: s.pack }))
-          });
-          loggedRef.current = true;
-        }
+        // Debug log the final mapping
+        console.log('Final sticker mapping:', {
+          total: stickerFiles.length,
+          byPack: {
+            twitch: stickerFiles.filter(s => s.pack === '100DevsTwitch').length,
+            discord: stickerFiles.filter(s => s.pack === '100DevsDiscord').length,
+            undefined: stickerFiles.filter(s => !s.pack).length
+          },
+          stickers: stickerFiles.map(s => ({
+            name: s.name,
+            pack: s.pack || 'undefined'
+          }))
+        });
 
       } catch (error) {
         console.error('Error loading stickers:', error);

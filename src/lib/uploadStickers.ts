@@ -1,14 +1,15 @@
 import { storage, databases } from './appwrite';
 import { ID, Permission, Role } from 'appwrite';
 import { STICKER_SOUND_MAP } from '../config/stickerSounds';
+import type { StickerCollection } from '../config/stickerSounds';
 
 // Constants
 export const STICKERS_BUCKET_ID = 'stickers';
 export const DATABASE_ID = 'idea-tracker';
 export const STICKER_METADATA_COLLECTION_ID = 'sticker_metadata';
 
-export async function uploadStickers(files: File[]) {
-  console.log('Received files in uploadStickers:', files); // Debug log
+export async function uploadStickers(files: File[], collection: StickerCollection = '100DevsTwitch') {
+  console.log('Received files in uploadStickers:', files, 'for collection:', collection); // Debug log
   
   // Input validation with more detailed error
   if (!files) {
@@ -53,12 +54,12 @@ export async function uploadStickers(files: File[]) {
         {
           fileId: fileUpload.$id,
           fileName: file.name,
-          pack: '100DevsTwitch',
-          soundFileId: STICKER_SOUND_MAP[file.name] ?? null // Use nullish coalescing
+          pack: collection, // Use the provided collection parameter
+          soundFileId: STICKER_SOUND_MAP[file.name] ?? null
         }
       );
       
-      console.log(`[SUCCESS] Uploaded ${file.name}`);
+      console.log(`[SUCCESS] Uploaded ${file.name} to ${collection}`);
       successCount++;
     } catch (error) {
       console.error(`[ERROR] Failed to upload ${file.name}:`, error);
@@ -68,6 +69,7 @@ export async function uploadStickers(files: File[]) {
 
   console.log(`
 Upload complete!
+Collection: ${collection}
 Successfully uploaded: ${successCount}
 Failed: ${failCount}
 Total files: ${pngFiles.length}

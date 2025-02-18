@@ -18,7 +18,7 @@ import { MICRO_LEON_STICKER_ID } from '../config/constants';
 
 const BOOSTER_PACK_COST = 100;
 const MAX_PACKS = 10;
-
+// TODO: Grab audio from query in sticker meta data
 interface StickerSounds {
   [key: string]: HTMLAudioElement;
 }
@@ -39,6 +39,23 @@ export function Store() {
   const stickerSounds = useRef<StickerSounds>({});
   const [soundsLoaded, setSoundsLoaded] = useState(false);
   const [playingSticker, setPlayingSticker] = useState<string | null>(null);
+
+  const twichStickers = useMemo(() => {
+    return stickers.filter(sticker => sticker.pack === '100DevsTwitch');
+  }, [stickers]);
+
+  const discordStickers = useMemo(() => {
+    return stickers.filter(sticker => sticker.pack === '100DevsDiscord');
+  }, [stickers]);
+
+  useEffect(() => {
+    console.log('Sticker collections:', {
+      twitch: twichStickers.length,
+      discord: discordStickers.length,
+      all: stickers.length,
+      packs: stickers.map(s => ({ name: s.name, pack: s.pack }))
+    });
+  }, [twichStickers, discordStickers, stickers]);
 
   useEffect(() => {
     const loadStickerSounds = async () => {
@@ -268,17 +285,6 @@ export function Store() {
   const handleRewardClose = () => {
     setShowReward(false);
   };
-
-  // Filter stickers by pack
-  const twichStickers = useMemo(() => 
-    stickers.filter(sticker => sticker.pack === '100DevsTwitch' || !sticker.pack),
-    [stickers]
-  );
-
-  const discordStickers = useMemo(() => 
-    stickers.filter(sticker => sticker.pack === '100DevsDiscord'),
-    [stickers]
-  );
 
   // Render a sticker grid section with icon
   const StickerGrid = useMemo(() => {
